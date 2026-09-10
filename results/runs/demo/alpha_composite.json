@@ -1,0 +1,213 @@
+{
+  "task_id": "alpha_composite",
+  "provider": "offline",
+  "model": "replay-pool",
+  "use_advisor": true,
+  "max_rounds": 4,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    inv = 255 - src[:, :, 3:4]\n    return np.clip(src + (dst * inv) // 255, 0, 255).astype(np.uint8)",
+      "coder_note": "Vectorise the whole page at once with plain array arithmetic.",
+      "judge": {
+        "pass": false,
+        "error": "3042642/3145728 elements differ; first at (0, 0, 0) got=222 want=255",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "alpha_composite",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "exact",
+          "detail": "3042642/3145728 elements differ; first at (0, 0, 0) got=222 want=255",
+          "metrics": {
+            "mismatched": 3042642.0,
+            "mismatch_frac": 0.9672298431396484
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "Output is not bit-identical: 96.7% of elements differ. 3042642/3145728 elements differ; first at (0, 0, 0) got=222 want=255 A mismatch this broad points at the arithmetic width or the rounding rule rather than an edge case.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 0.767,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s = src.astype(np.float64)\n    d = dst.astype(np.float64)\n    inv = 255.0 - s[:, :, 3:4]\n    out = s + np.floor(d * inv / 255.0)\n    return np.clip(out, 0, 255).astype(np.uint8)",
+      "coder_note": "Widen to float64 so the multiply cannot wrap, then floor and clip.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 68.22159999865107,
+        "stage": "done",
+        "task_id": "alpha_composite",
+        "speedup": 1.0135309051734644,
+        "baseline_ms": 69.14469999901485,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 68.22159999865107,
+          "mean_ms": 68.33732666758199,
+          "p05_ms": 59.941400002571754,
+          "p95_ms": 78.70169999659993,
+          "iqr_ms": 10.711100003391039,
+          "cv": 0.08117193982925691,
+          "trials": 15,
+          "samples_ms": [
+            59.9414,
+            60.3167,
+            61.9235,
+            61.9344,
+            64.6968,
+            65.6328,
+            67.5492,
+            68.2216,
+            71.6812,
+            72.3239,
+            72.6221,
+            72.6455,
+            73.3517,
+            73.5174,
+            78.7017
+          ]
+        }
+      },
+      "critique": "Correct, and 1.01x the naive baseline (68.22 ms vs 69.14 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.972,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s = src.astype(np.uint16)\n    d = dst.astype(np.uint16)\n    inv = 255 - s[:, :, 3:4]\n    out = s + (d * inv) // 255\n    return np.minimum(out, 255).astype(np.uint8)",
+      "coder_note": "float64 triples the memory traffic. uint16 is wide enough for 255*255 and keeps the op integer end to end.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 30.088299994531553,
+        "stage": "done",
+        "task_id": "alpha_composite",
+        "speedup": 2.298059378947354,
+        "baseline_ms": 69.14469999901485,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 30.088299994531553,
+          "mean_ms": 30.179666667148314,
+          "p05_ms": 28.686000005109236,
+          "p95_ms": 32.085600003483705,
+          "iqr_ms": 1.203999992867466,
+          "cv": 0.030394879720357676,
+          "trials": 15,
+          "samples_ms": [
+            28.686,
+            29.0864,
+            29.3564,
+            29.4018,
+            29.7634,
+            29.939,
+            29.9877,
+            30.0883,
+            30.1561,
+            30.2184,
+            30.4846,
+            30.6058,
+            30.8427,
+            31.9928,
+            32.0856
+          ]
+        }
+      },
+      "critique": "Correct, and 2.30x the naive baseline (30.09 ms vs 69.14 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.203,
+      "parse_failed": false
+    },
+    {
+      "index": 3,
+      "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s16 = src.astype(np.uint16)\n    scratch = dst.astype(np.uint16)\n    inv = 255 - s16[:, :, 3:4]\n\n    scratch *= inv\n    scratch //= 255\n    scratch += s16\n    np.minimum(scratch, 255, out=scratch)\n    return scratch.astype(np.uint8)",
+      "coder_note": "This op is memory bound, so cut allocations: one scratch buffer, in-place multiply, in-place floor-divide, single output write.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 24.523200001567602,
+        "stage": "done",
+        "task_id": "alpha_composite",
+        "speedup": 2.8195626995903837,
+        "baseline_ms": 69.14469999901485,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 24.523200001567602,
+          "mean_ms": 24.8218999991271,
+          "p05_ms": 24.128699995344505,
+          "p95_ms": 26.68969999649562,
+          "iqr_ms": 0.8165000035660341,
+          "cv": 0.027751137340369283,
+          "trials": 15,
+          "samples_ms": [
+            24.1287,
+            24.2056,
+            24.2949,
+            24.3135,
+            24.3237,
+            24.3883,
+            24.4063,
+            24.5232,
+            24.7969,
+            24.9553,
+            24.963,
+            25.13,
+            25.3087,
+            25.9007,
+            26.6897
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.089,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 69.14469999901485,
+  "best_round": 3,
+  "best_ms": 24.523200001567602,
+  "best_speedup": 2.8195626995903837,
+  "best_kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s16 = src.astype(np.uint16)\n    scratch = dst.astype(np.uint16)\n    inv = 255 - s16[:, :, 3:4]\n\n    scratch *= inv\n    scratch //= 255\n    scratch += s16\n    np.minimum(scratch, 255, out=scratch)\n    return scratch.astype(np.uint8)",
+  "solved": true,
+  "rounds_to_first_pass": 1,
+  "cost_usd": 0.0
+}

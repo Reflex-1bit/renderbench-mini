@@ -1,0 +1,163 @@
+{
+  "task_id": "srgb_gamma",
+  "provider": "offline",
+  "model": "replay-pool",
+  "use_advisor": true,
+  "max_rounds": 4,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(linear):\n    s = 1.055 * np.power(linear, 1.0 / 2.4) - 0.055\n    return np.clip(np.rint(s * 255.0), 0, 255).astype(np.uint8)",
+      "coder_note": "Vectorise the transfer function as a single power law.",
+      "judge": {
+        "pass": false,
+        "error": "max abs err 3 vs atol 1",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "srgb_gamma",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "tolerance",
+          "detail": "max abs err 3 vs atol 1",
+          "metrics": {
+            "max_abs_err": 3.0,
+            "atol": 1.0,
+            "over_tol_frac": 0.0008549160427517361
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "Exceeds the allowed tolerance: max abs error 3 against a cap of 1, over 0.09% of elements. The deviation is systematic, so check the formula and the sampling convention, not the precision.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 0.691,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(linear):\n    v = linear.astype(np.float64)\n    s = np.where(v <= 0.0031308,\n                 v * 12.92,\n                 1.055 * np.power(np.maximum(v, 0.0), 1.0 / 2.4) - 0.055)\n    return np.clip(np.rint(s * 255.0), 0, 255).astype(np.uint8)",
+      "coder_note": "Restore the linear segment below the 0.0031308 knee, still vectorised.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 118.21430000418331,
+        "stage": "done",
+        "task_id": "srgb_gamma",
+        "speedup": 0.719633749817481,
+        "baseline_ms": 85.0709999940591,
+        "oracle": {
+          "mode": "tolerance",
+          "detail": "max abs err 0 vs atol 1",
+          "metrics": {
+            "max_abs_err": 0.0,
+            "atol": 1.0,
+            "over_tol_frac": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 118.21430000418331,
+          "mean_ms": 119.67602666748765,
+          "p05_ms": 111.57919999823207,
+          "p95_ms": 140.3649999992922,
+          "iqr_ms": 7.686099997954443,
+          "cv": 0.0614513692333828,
+          "trials": 15,
+          "samples_ms": [
+            111.5792,
+            112.2814,
+            112.8402,
+            114.7645,
+            115.8376,
+            115.9501,
+            116.0009,
+            118.2143,
+            119.0079,
+            119.1249,
+            121.2564,
+            122.4506,
+            125.8503,
+            129.6171,
+            140.365
+          ]
+        }
+      },
+      "critique": "Correct, and 0.72x the naive baseline (118.21 ms vs 85.07 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 2.904,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": "import numpy as np\n\n_N = 4096\n_x = (np.arange(_N) + 0.5) / _N\n_s = np.where(_x <= 0.0031308, _x * 12.92,\n              1.055 * np.power(_x, 1.0 / 2.4) - 0.055)\n_LUT = np.clip(np.rint(_s * 255.0), 0, 255).astype(np.uint8)\n\ndef kernel(linear):\n    idx = np.clip((linear * _N).astype(np.int32), 0, _N - 1)\n    return _LUT[idx]",
+      "coder_note": "pow() on 2.4M pixels dominates. The oracle allows one code value of error, so a 4096-entry LUT indexed by the quantised input is in budget and turns the transcendental into a gather.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 19.2038999957731,
+        "stage": "done",
+        "task_id": "srgb_gamma",
+        "speedup": 4.429881431000149,
+        "baseline_ms": 85.0709999940591,
+        "oracle": {
+          "mode": "tolerance",
+          "detail": "max abs err 1 vs atol 1",
+          "metrics": {
+            "max_abs_err": 1.0,
+            "atol": 1.0,
+            "over_tol_frac": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 19.2038999957731,
+          "mean_ms": 19.04525999998441,
+          "p05_ms": 17.45100000698585,
+          "p95_ms": 20.924800002831034,
+          "iqr_ms": 1.377900000079535,
+          "cv": 0.053932195290217894,
+          "trials": 15,
+          "samples_ms": [
+            17.451,
+            17.5446,
+            17.8669,
+            18.1536,
+            18.4945,
+            18.5401,
+            19.0817,
+            19.2039,
+            19.2186,
+            19.2588,
+            19.5224,
+            19.5315,
+            20.0676,
+            20.8189,
+            20.9248
+          ]
+        }
+      },
+      "critique": "Correct, and 4.43x the naive baseline (19.20 ms vs 85.07 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.016,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 85.0709999940591,
+  "best_round": 2,
+  "best_ms": 19.2038999957731,
+  "best_speedup": 4.429881431000149,
+  "best_kernel": "import numpy as np\n\n_N = 4096\n_x = (np.arange(_N) + 0.5) / _N\n_s = np.where(_x <= 0.0031308, _x * 12.92,\n              1.055 * np.power(_x, 1.0 / 2.4) - 0.055)\n_LUT = np.clip(np.rint(_s * 255.0), 0, 255).astype(np.uint8)\n\ndef kernel(linear):\n    idx = np.clip((linear * _N).astype(np.int32), 0, _N - 1)\n    return _LUT[idx]",
+  "solved": true,
+  "rounds_to_first_pass": 1,
+  "cost_usd": 0.0
+}

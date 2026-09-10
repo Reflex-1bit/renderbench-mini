@@ -1,0 +1,96 @@
+{
+  "task_id": "blit",
+  "provider": "offline",
+  "model": "replay-pool",
+  "use_advisor": true,
+  "max_rounds": 4,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(dst, src, dy, dx):\n    out = dst.copy()\n    dy, dx = int(dy), int(dx)\n    sh, sw = src.shape[:2]\n    out[dy:dy + sh, dx:dx + sw] = src\n    return out",
+      "coder_note": "Replace the per-pixel loop with a single slice assignment.",
+      "judge": {
+        "pass": false,
+        "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 7, in kernel\nValueError: could not broadcast input array from shape (256,192,4) into shape (144,108,4)\n",
+        "timing": null,
+        "stage": "run",
+        "task_id": "blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The kernel raised at runtime: ValueError: could not broadcast input array from shape (256,192,4) into shape (144,108,4). This is a shape or indexing contract violation, not a performance issue -- re-read the required behaviour at the array bounds before optimising.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 0.545,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(dst, src, dy, dx):\n    out = dst.copy()\n    H, W = out.shape[:2]\n    sh, sw = src.shape[:2]\n    dy, dx = int(dy), int(dx)\n\n    y0, x0 = max(0, dy), max(0, dx)\n    y1, x1 = min(H, dy + sh), min(W, dx + sw)\n    if y1 > y0 and x1 > x0:\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n    return out",
+      "coder_note": "Compute the clipped overlap rectangle first, then slice both sides.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.9375000008731149,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 13.005439987090627,
+        "baseline_ms": 12.192599999252707,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.9375000008731149,
+          "mean_ms": 0.9797400009119883,
+          "p05_ms": 0.6941000028746203,
+          "p95_ms": 1.3116000045556575,
+          "iqr_ms": 0.2555999963078648,
+          "cv": 0.18544096450483905,
+          "trials": 15,
+          "samples_ms": [
+            0.6941,
+            0.6986,
+            0.7945,
+            0.8868,
+            0.91,
+            0.925,
+            0.9363,
+            0.9375,
+            0.9484,
+            0.9544,
+            1.0893,
+            1.1424,
+            1.2122,
+            1.255,
+            1.3116
+          ]
+        }
+      },
+      "critique": "Correct, and 13.01x the naive baseline (0.94 ms vs 12.19 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 0.64,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 12.192599999252707,
+  "best_round": 1,
+  "best_ms": 0.9375000008731149,
+  "best_speedup": 13.005439987090627,
+  "best_kernel": "import numpy as np\n\ndef kernel(dst, src, dy, dx):\n    out = dst.copy()\n    H, W = out.shape[:2]\n    sh, sw = src.shape[:2]\n    dy, dx = int(dy), int(dx)\n\n    y0, x0 = max(0, dy), max(0, dx)\n    y1, x1 = min(H, dy + sh), min(W, dx + sw)\n    if y1 > y0 and x1 > x0:\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 1,
+  "cost_usd": 0.0
+}

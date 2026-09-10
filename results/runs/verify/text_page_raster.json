@@ -1,0 +1,190 @@
+{
+  "task_id": "text_page_raster",
+  "provider": "offline",
+  "model": "replay-pool",
+  "use_advisor": true,
+  "max_rounds": 4,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    for i in range(len(gid)):\n        y0 = int(round(float(gy[i]))); x0 = int(round(float(gx[i])))\n        cov = atlas[gid[i]].astype(np.float64) / 255.0\n        tile = out[y0:y0 + gh, x0:x0 + gw]\n        a = cov[..., None]\n        tile *= (1.0 - a)\n        tile += a * rgb[i].astype(np.float64)\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "coder_note": "Snap each glyph to the nearest integer pixel so the blit is a plain slice -- the sub-pixel offset should be visually negligible.",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.59629 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.41283 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "text_page_raster",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.59629 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.41283 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.5962890582388836,
+            "max_pixel_err": 1.0,
+            "bad_frac": 0.4128313030638612
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "Structurally wrong output: SSIM 0.5963 is below the 0.990 floor; worst pixel is off by 1.000 (cap 0.060); 41.28% of pixels exceed the per-pixel cap (limit 2%). Errors concentrated at glyph edges mean the sub-pixel offset is being discarded rather than resampled.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 0.716,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    n, gh, gw = atlas.shape\n    for i in range(len(gid)):\n        y0 = int(np.floor(gy[i])); x0 = int(np.floor(gx[i]))\n        fy = float(gy[i]) - y0; fx = float(gx[i]) - x0\n\n        pad = np.zeros((gh + 1, gw + 1), dtype=np.float64)\n        pad[:gh, :gw] = atlas[gid[i]]\n        cov = (pad[:gh, :gw] * (1 - fy) * (1 - fx)\n               + pad[1:, :gw] * fy * (1 - fx)\n               + pad[:gh, 1:] * (1 - fy) * fx\n               + pad[1:, 1:] * fy * fx) / 255.0\n\n        tile = out[y0:y0 + gh, x0:x0 + gw]\n        a = cov[..., None]\n        tile *= (1.0 - a)\n        tile += a * rgb[i].astype(np.float64)\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "coder_note": "Restore the sub-pixel resample: pad the coverage and blend the four shifted taps per glyph before compositing.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 182.24109999573557,
+        "stage": "done",
+        "task_id": "text_page_raster",
+        "speedup": 1.0356824010064911,
+        "baseline_ms": 188.74390000564745,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+          "metrics": {
+            "ssim": 1.0,
+            "max_pixel_err": 0.0,
+            "bad_frac": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 182.24109999573557,
+          "mean_ms": 182.06113999913214,
+          "p05_ms": 170.6525999979931,
+          "p95_ms": 192.95270000293385,
+          "iqr_ms": 11.300099991785828,
+          "cv": 0.04343830896031177,
+          "trials": 5,
+          "samples_ms": [
+            170.6526,
+            176.5796,
+            182.2411,
+            187.8797,
+            192.9527
+          ]
+        }
+      },
+      "critique": "Correct, and 1.04x the naive baseline (182.24 ms vs 188.74 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.873,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float64)[:, None, None]\n    fx = (gx - x0).astype(np.float64)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float64)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * (1 - fy) * (1 - fx)\n           + pad[:, 1:, :gw] * fy * (1 - fx)\n           + pad[:, :gh, 1:] * (1 - fy) * fx\n           + pad[:, 1:, 1:] * fy * fx)\n    cov *= (1.0 / 255.0)\n\n    colours = rgb.astype(np.float64)\n    for i in range(m):\n        a = cov[i][..., None]\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= (1.0 - a)\n        tile += a * colours[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "coder_note": "The resample is per-glyph but independent, so lift it out of the loop: gather every glyph into one (n, gh+1, gw+1) padded stack and compute all coverages in four vectorised terms. Only the order-dependent blend stays in Python.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 166.40950000146404,
+        "stage": "done",
+        "task_id": "text_page_raster",
+        "speedup": 1.1342134914412152,
+        "baseline_ms": 188.74390000564745,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+          "metrics": {
+            "ssim": 1.0,
+            "max_pixel_err": 0.0,
+            "bad_frac": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 166.40950000146404,
+          "mean_ms": 167.58133999974234,
+          "p05_ms": 163.06140000233427,
+          "p95_ms": 176.53469999640947,
+          "iqr_ms": 1.9577000057324767,
+          "cv": 0.027887050563933518,
+          "trials": 5,
+          "samples_ms": [
+            163.0614,
+            164.9717,
+            166.4095,
+            166.9294,
+            176.5347
+          ]
+        }
+      },
+      "critique": "Correct, and 1.13x the naive baseline (166.41 ms vs 188.74 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.776,
+      "parse_failed": false
+    },
+    {
+      "index": 3,
+      "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float32).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float32)[:, None, None]\n    fx = (gx - x0).astype(np.float32)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float32)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * ((1 - fy) * (1 - fx))\n           + pad[:, 1:, :gw] * (fy * (1 - fx))\n           + pad[:, :gh, 1:] * ((1 - fy) * fx)\n           + pad[:, 1:, 1:] * (fy * fx))\n    cov *= np.float32(1.0 / 255.0)\n\n    inv = 1.0 - cov\n    pre = cov[..., None] * rgb.astype(np.float32)[:, None, None, :]\n\n    for i in range(m):\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= inv[i][..., None]\n        tile += pre[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "coder_note": "Fold the colour into the coverage once (premultiply) so the inner blend is a single fused multiply-add on a (gh, gw, 3) tile, and keep the coverage stack in float32 to halve the bandwidth of the batched resample.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 116.081000000122,
+        "stage": "done",
+        "task_id": "text_page_raster",
+        "speedup": 1.6259672125967994,
+        "baseline_ms": 188.74390000564745,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+          "metrics": {
+            "ssim": 1.0,
+            "max_pixel_err": 0.0,
+            "bad_frac": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 116.081000000122,
+          "mean_ms": 115.8129800009192,
+          "p05_ms": 108.78640000009909,
+          "p95_ms": 120.10569999984,
+          "iqr_ms": 2.9305999996722676,
+          "cv": 0.03348770952046144,
+          "trials": 5,
+          "samples_ms": [
+            108.7864,
+            115.5806,
+            116.081,
+            118.5112,
+            120.1057
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.427,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 188.74390000564745,
+  "best_round": 3,
+  "best_ms": 116.081000000122,
+  "best_speedup": 1.6259672125967994,
+  "best_kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float32).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float32)[:, None, None]\n    fx = (gx - x0).astype(np.float32)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float32)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * ((1 - fy) * (1 - fx))\n           + pad[:, 1:, :gw] * (fy * (1 - fx))\n           + pad[:, :gh, 1:] * ((1 - fy) * fx)\n           + pad[:, 1:, 1:] * (fy * fx))\n    cov *= np.float32(1.0 / 255.0)\n\n    inv = 1.0 - cov\n    pre = cov[..., None] * rgb.astype(np.float32)[:, None, None, :]\n\n    for i in range(m):\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= inv[i][..., None]\n        tile += pre[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+  "solved": true,
+  "rounds_to_first_pass": 1,
+  "cost_usd": 0.0
+}

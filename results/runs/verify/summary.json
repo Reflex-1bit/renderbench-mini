@@ -1,0 +1,1055 @@
+{
+  "tag": "verify",
+  "timestamp_utc": "20260909T210820Z",
+  "provider": "offline",
+  "model": "replay-pool",
+  "pinned_model_setting": "glm-5.3",
+  "prompt_version": "rb-mini-0.3",
+  "seed": 20260909,
+  "max_rounds": 4,
+  "advisor": true,
+  "advisor_ablation_supported": false,
+  "offline_disclaimer": "provider=offline replays a fixed pool of human-written kernels. All correctness verdicts and timings are real measurements of that code by the frozen judge, but the run measures the HARNESS, not any model's capability.",
+  "environment": {
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 96 Stepping 0, AuthenticAMD",
+    "numpy": "2.5.1",
+    "torch": null,
+    "cuda_device": null,
+    "triton": null
+  },
+  "calibration": {
+    "all_probes_separated": true,
+    "thresholds": {
+      "min_ssim": 0.998,
+      "max_pixel_err": 0.1,
+      "max_bad_frac": 0.001
+    },
+    "ssim_margin": -2.5591623127318996e-05,
+    "caught_only_by_caps": [
+      "drop-one-glyph"
+    ]
+  },
+  "wall_s": 24.5,
+  "n_tasks": 6,
+  "n_solved": 6,
+  "geomean_speedup": 3.108,
+  "total_cost_usd": 0.0,
+  "tasks": [
+    {
+      "task_id": "blit",
+      "provider": "offline",
+      "model": "replay-pool",
+      "use_advisor": true,
+      "max_rounds": 4,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\ndef kernel(dst, src, dy, dx):\n    out = dst.copy()\n    dy, dx = int(dy), int(dx)\n    sh, sw = src.shape[:2]\n    out[dy:dy + sh, dx:dx + sw] = src\n    return out",
+          "coder_note": "Replace the per-pixel loop with a single slice assignment.",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 7, in kernel\nValueError: could not broadcast input array from shape (256,192,4) into shape (144,108,4)\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "The kernel raised at runtime: ValueError: could not broadcast input array from shape (256,192,4) into shape (144,108,4). This is a shape or indexing contract violation, not a performance issue -- re-read the required behaviour at the array bounds before optimising.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.416,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\ndef kernel(dst, src, dy, dx):\n    out = dst.copy()\n    H, W = out.shape[:2]\n    sh, sw = src.shape[:2]\n    dy, dx = int(dy), int(dx)\n\n    y0, x0 = max(0, dy), max(0, dx)\n    y1, x1 = min(H, dy + sh), min(W, dx + sw)\n    if y1 > y0 and x1 > x0:\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n    return out",
+          "coder_note": "Compute the clipped overlap rectangle first, then slice both sides.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 0.9293000039178878,
+            "stage": "done",
+            "task_id": "blit",
+            "speedup": 12.1858387535681,
+            "baseline_ms": 11.324300001433585,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 0.9293000039178878,
+              "mean_ms": 0.9039999999610396,
+              "p05_ms": 0.6906999988132156,
+              "p95_ms": 1.0422999985166825,
+              "iqr_ms": 0.07429999823216349,
+              "cv": 0.0992147573732588,
+              "trials": 15,
+              "samples_ms": [
+                0.6907,
+                0.7072,
+                0.8754,
+                0.876,
+                0.9104,
+                0.9106,
+                0.9119,
+                0.9293,
+                0.9332,
+                0.9354,
+                0.9416,
+                0.9503,
+                0.9681,
+                0.9776,
+                1.0423
+              ]
+            }
+          },
+          "critique": "Correct, and 12.19x the naive baseline (0.93 ms vs 11.32 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.48,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 11.324300001433585,
+      "best_round": 1,
+      "best_ms": 0.9293000039178878,
+      "best_speedup": 12.1858387535681,
+      "best_kernel": "import numpy as np\n\ndef kernel(dst, src, dy, dx):\n    out = dst.copy()\n    H, W = out.shape[:2]\n    sh, sw = src.shape[:2]\n    dy, dx = int(dy), int(dx)\n\n    y0, x0 = max(0, dy), max(0, dx)\n    y1, x1 = min(H, dy + sh), min(W, dx + sw)\n    if y1 > y0 and x1 > x0:\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n    return out",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.0
+    },
+    {
+      "task_id": "alpha_composite",
+      "provider": "offline",
+      "model": "replay-pool",
+      "use_advisor": true,
+      "max_rounds": 4,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    inv = 255 - src[:, :, 3:4]\n    return np.clip(src + (dst * inv) // 255, 0, 255).astype(np.uint8)",
+          "coder_note": "Vectorise the whole page at once with plain array arithmetic.",
+          "judge": {
+            "pass": false,
+            "error": "3042642/3145728 elements differ; first at (0, 0, 0) got=222 want=255",
+            "timing": null,
+            "stage": "correctness",
+            "task_id": "alpha_composite",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {
+              "mode": "exact",
+              "detail": "3042642/3145728 elements differ; first at (0, 0, 0) got=222 want=255",
+              "metrics": {
+                "mismatched": 3042642.0,
+                "mismatch_frac": 0.9672298431396484
+              }
+            },
+            "timing_detail": {}
+          },
+          "critique": "Output is not bit-identical: 96.7% of elements differ. 3042642/3145728 elements differ; first at (0, 0, 0) got=222 want=255 A mismatch this broad points at the arithmetic width or the rounding rule rather than an edge case.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.655,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s = src.astype(np.float64)\n    d = dst.astype(np.float64)\n    inv = 255.0 - s[:, :, 3:4]\n    out = s + np.floor(d * inv / 255.0)\n    return np.clip(out, 0, 255).astype(np.uint8)",
+          "coder_note": "Widen to float64 so the multiply cannot wrap, then floor and clip.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 72.23660000454402,
+            "stage": "done",
+            "task_id": "alpha_composite",
+            "speedup": 0.9128087422419083,
+            "baseline_ms": 65.93819999397965,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 72.23660000454402,
+              "mean_ms": 72.51300000061747,
+              "p05_ms": 66.77199999830918,
+              "p95_ms": 80.32960000127787,
+              "iqr_ms": 3.876700000546407,
+              "cv": 0.04640582239689632,
+              "trials": 15,
+              "samples_ms": [
+                66.772,
+                67.3094,
+                69.9492,
+                70.2017,
+                70.9591,
+                71.7916,
+                71.9935,
+                72.2366,
+                72.852,
+                73.0761,
+                73.8233,
+                74.0784,
+                75.0889,
+                77.2336,
+                80.3296
+              ]
+            }
+          },
+          "critique": "Correct, and 0.91x the naive baseline (72.24 ms vs 65.94 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.851,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s = src.astype(np.uint16)\n    d = dst.astype(np.uint16)\n    inv = 255 - s[:, :, 3:4]\n    out = s + (d * inv) // 255\n    return np.minimum(out, 255).astype(np.uint8)",
+          "coder_note": "float64 triples the memory traffic. uint16 is wide enough for 255*255 and keeps the op integer end to end.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 33.9012000040384,
+            "stage": "done",
+            "task_id": "alpha_composite",
+            "speedup": 1.945010795668735,
+            "baseline_ms": 65.93819999397965,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 33.9012000040384,
+              "mean_ms": 33.78208666690625,
+              "p05_ms": 31.352199999673758,
+              "p95_ms": 36.0140999982832,
+              "iqr_ms": 1.5486999982385896,
+              "cv": 0.03249831131295794,
+              "trials": 15,
+              "samples_ms": [
+                31.3522,
+                32.5982,
+                32.8207,
+                32.9979,
+                33.0366,
+                33.6917,
+                33.783,
+                33.9012,
+                33.9679,
+                34.0305,
+                34.063,
+                34.5466,
+                34.7173,
+                35.2104,
+                36.0141
+              ]
+            }
+          },
+          "critique": "Correct, and 1.95x the naive baseline (33.90 ms vs 65.94 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.114,
+          "parse_failed": false
+        },
+        {
+          "index": 3,
+          "kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s16 = src.astype(np.uint16)\n    scratch = dst.astype(np.uint16)\n    inv = 255 - s16[:, :, 3:4]\n\n    scratch *= inv\n    scratch //= 255\n    scratch += s16\n    np.minimum(scratch, 255, out=scratch)\n    return scratch.astype(np.uint8)",
+          "coder_note": "This op is memory bound, so cut allocations: one scratch buffer, in-place multiply, in-place floor-divide, single output write.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 25.040000000444707,
+            "stage": "done",
+            "task_id": "alpha_composite",
+            "speedup": 2.6333146961984264,
+            "baseline_ms": 65.93819999397965,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 25.040000000444707,
+              "mean_ms": 25.182633332830545,
+              "p05_ms": 24.44159999868134,
+              "p95_ms": 28.78910000436008,
+              "iqr_ms": 0.3262000027461909,
+              "cv": 0.03921912002325985,
+              "trials": 15,
+              "samples_ms": [
+                24.4416,
+                24.6556,
+                24.6556,
+                24.765,
+                24.8128,
+                24.8893,
+                24.9795,
+                25.04,
+                25.0517,
+                25.0705,
+                25.0779,
+                25.0912,
+                25.1361,
+                25.2836,
+                28.7891
+              ]
+            }
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.944,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 65.93819999397965,
+      "best_round": 3,
+      "best_ms": 25.040000000444707,
+      "best_speedup": 2.6333146961984264,
+      "best_kernel": "import numpy as np\n\ndef kernel(dst, src):\n    s16 = src.astype(np.uint16)\n    scratch = dst.astype(np.uint16)\n    inv = 255 - s16[:, :, 3:4]\n\n    scratch *= inv\n    scratch //= 255\n    scratch += s16\n    np.minimum(scratch, 255, out=scratch)\n    return scratch.astype(np.uint8)",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.0
+    },
+    {
+      "task_id": "srgb_gamma",
+      "provider": "offline",
+      "model": "replay-pool",
+      "use_advisor": true,
+      "max_rounds": 4,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\ndef kernel(linear):\n    s = 1.055 * np.power(linear, 1.0 / 2.4) - 0.055\n    return np.clip(np.rint(s * 255.0), 0, 255).astype(np.uint8)",
+          "coder_note": "Vectorise the transfer function as a single power law.",
+          "judge": {
+            "pass": false,
+            "error": "max abs err 3 vs atol 1",
+            "timing": null,
+            "stage": "correctness",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 3 vs atol 1",
+              "metrics": {
+                "max_abs_err": 3.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0008549160427517361
+              }
+            },
+            "timing_detail": {}
+          },
+          "critique": "Exceeds the allowed tolerance: max abs error 3 against a cap of 1, over 0.09% of elements. The deviation is systematic, so check the formula and the sampling convention, not the precision.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.542,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\ndef kernel(linear):\n    v = linear.astype(np.float64)\n    s = np.where(v <= 0.0031308,\n                 v * 12.92,\n                 1.055 * np.power(np.maximum(v, 0.0), 1.0 / 2.4) - 0.055)\n    return np.clip(np.rint(s * 255.0), 0, 255).astype(np.uint8)",
+          "coder_note": "Restore the linear segment below the 0.0031308 knee, still vectorised.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 119.06669999734731,
+            "stage": "done",
+            "task_id": "srgb_gamma",
+            "speedup": 0.7329941957030095,
+            "baseline_ms": 87.27519999956712,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 0 vs atol 1",
+              "metrics": {
+                "max_abs_err": 0.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 119.06669999734731,
+              "mean_ms": 118.56184666588281,
+              "p05_ms": 104.3197999970289,
+              "p95_ms": 128.8674999959767,
+              "iqr_ms": 2.574900005129166,
+              "cv": 0.05331408814859172,
+              "trials": 15,
+              "samples_ms": [
+                104.3198,
+                104.6737,
+                116.0521,
+                118.201,
+                118.6893,
+                118.7552,
+                118.9487,
+                119.0667,
+                119.9797,
+                120.104,
+                120.5543,
+                120.7759,
+                123.8788,
+                125.561,
+                128.8675
+              ]
+            }
+          },
+          "critique": "Correct, and 0.73x the naive baseline (119.07 ms vs 87.28 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 2.753,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\n_N = 4096\n_x = (np.arange(_N) + 0.5) / _N\n_s = np.where(_x <= 0.0031308, _x * 12.92,\n              1.055 * np.power(_x, 1.0 / 2.4) - 0.055)\n_LUT = np.clip(np.rint(_s * 255.0), 0, 255).astype(np.uint8)\n\ndef kernel(linear):\n    idx = np.clip((linear * _N).astype(np.int32), 0, _N - 1)\n    return _LUT[idx]",
+          "coder_note": "pow() on 2.4M pixels dominates. The oracle allows one code value of error, so a 4096-entry LUT indexed by the quantised input is in budget and turns the transcendental into a gather.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 18.708299998252187,
+            "stage": "done",
+            "task_id": "srgb_gamma",
+            "speedup": 4.665052410305627,
+            "baseline_ms": 87.27519999956712,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 1 vs atol 1",
+              "metrics": {
+                "max_abs_err": 1.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 18.708299998252187,
+              "mean_ms": 18.96795333304908,
+              "p05_ms": 18.219999998109415,
+              "p95_ms": 21.9613000008394,
+              "iqr_ms": 0.6349000032059848,
+              "cv": 0.04653518001106247,
+              "trials": 15,
+              "samples_ms": [
+                18.22,
+                18.2432,
+                18.2452,
+                18.5526,
+                18.6002,
+                18.6691,
+                18.6789,
+                18.7083,
+                18.7957,
+                18.8091,
+                19.0446,
+                19.1875,
+                19.1943,
+                19.6093,
+                21.9613
+              ]
+            }
+          },
+          "critique": "Correct, and 4.67x the naive baseline (18.71 ms vs 87.28 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.878,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 87.27519999956712,
+      "best_round": 2,
+      "best_ms": 18.708299998252187,
+      "best_speedup": 4.665052410305627,
+      "best_kernel": "import numpy as np\n\n_N = 4096\n_x = (np.arange(_N) + 0.5) / _N\n_s = np.where(_x <= 0.0031308, _x * 12.92,\n              1.055 * np.power(_x, 1.0 / 2.4) - 0.055)\n_LUT = np.clip(np.rint(_s * 255.0), 0, 255).astype(np.uint8)\n\ndef kernel(linear):\n    idx = np.clip((linear * _N).astype(np.int32), 0, _N - 1)\n    return _LUT[idx]",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.0
+    },
+    {
+      "task_id": "bilinear_resize",
+      "provider": "offline",
+      "model": "replay-pool",
+      "use_advisor": true,
+      "max_rounds": 4,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    sy = np.arange(out_h) * (sh - 1) / (out_h - 1)\n    sx = np.arange(out_w) * (sw - 1) / (out_w - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wy = (sy - y0)[:, None, None]; wx = (sx - x0)[None, :, None]\n    s = src.astype(np.float64)\n    top = s[y0][:, x0] * (1 - wx) + s[y0][:, x1] * wx\n    bot = s[y1][:, x0] * (1 - wx) + s[y1][:, x1] * wx\n    return np.clip(np.rint(top * (1 - wy) + bot * wy), 0, 255).astype(np.uint8)",
+          "coder_note": "Vectorise with a coordinate grid over the full source extent.",
+          "judge": {
+            "pass": false,
+            "error": "max abs err 99 vs atol 1",
+            "timing": null,
+            "stage": "correctness",
+            "task_id": "bilinear_resize",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 99 vs atol 1",
+              "metrics": {
+                "max_abs_err": 99.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.9092528025309244
+              }
+            },
+            "timing_detail": {}
+          },
+          "critique": "Exceeds the allowed tolerance: max abs error 99 against a cap of 1, over 90.93% of elements. The deviation is systematic, so check the formula and the sampling convention, not the precision.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.711,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    sy = np.clip((np.arange(out_h) + 0.5) * sh / out_h - 0.5, 0, sh - 1)\n    sx = np.clip((np.arange(out_w) + 0.5) * sw / out_w - 0.5, 0, sw - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wy = (sy - y0)[:, None, None]; wx = (sx - x0)[None, :, None]\n    s = src.astype(np.float64)\n    top = s[y0][:, x0] * (1 - wx) + s[y0][:, x1] * wx\n    bot = s[y1][:, x0] * (1 - wx) + s[y1][:, x1] * wx\n    return np.clip(np.rint(top * (1 - wy) + bot * wy), 0, 255).astype(np.uint8)",
+          "coder_note": "Switch to half-pixel centres and clamp before flooring, per the spec.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 205.6099000001268,
+            "stage": "done",
+            "task_id": "bilinear_resize",
+            "speedup": 0.7214720691892621,
+            "baseline_ms": 148.34179999888875,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 0 vs atol 1",
+              "metrics": {
+                "max_abs_err": 0.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 205.6099000001268,
+              "mean_ms": 199.21967000045697,
+              "p05_ms": 174.3228999985149,
+              "p95_ms": 211.08249999815598,
+              "iqr_ms": 13.75440000265371,
+              "cv": 0.05702916589369997,
+              "trials": 10,
+              "samples_ms": [
+                174.3229,
+                186.0673,
+                192.7299,
+                194.4362,
+                205.0349,
+                206.1849,
+                206.2684,
+                206.4843,
+                209.5854,
+                211.0825
+              ]
+            }
+          },
+          "critique": "Correct, and 0.72x the naive baseline (205.61 ms vs 148.34 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 3.289,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    s = src.astype(np.float32)\n\n    sy = np.clip((np.arange(out_h) + 0.5) * sh / out_h - 0.5, 0, sh - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    wy = (sy - y0).astype(np.float32)[:, None, None]\n    rows = s[y0] * (1 - wy) + s[y1] * wy\n\n    sx = np.clip((np.arange(out_w) + 0.5) * sw / out_w - 0.5, 0, sw - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wx = (sx - x0).astype(np.float32)[None, :, None]\n    out = rows[:, x0] * (1 - wx) + rows[:, x1] * wx\n\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "The 4-tap gather materialises four full float64 pages. Do it separably instead: interpolate rows into an (out_h, sw) intermediate, then columns. float32 stays inside the 1-code-value budget.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 62.220899999374524,
+            "stage": "done",
+            "task_id": "bilinear_resize",
+            "speedup": 2.3841153053134874,
+            "baseline_ms": 148.34179999888875,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 0 vs atol 1",
+              "metrics": {
+                "max_abs_err": 0.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 62.220899999374524,
+              "mean_ms": 63.391250000859145,
+              "p05_ms": 57.10640000324929,
+              "p95_ms": 73.60830000106944,
+              "iqr_ms": 2.5250000035157427,
+              "cv": 0.06580192581215455,
+              "trials": 10,
+              "samples_ms": [
+                57.1064,
+                60.9816,
+                61.49,
+                61.7423,
+                62.0129,
+                62.4289,
+                63.2962,
+                64.015,
+                67.2309,
+                73.6083
+              ]
+            }
+          },
+          "critique": "Correct, and 2.38x the naive baseline (62.22 ms vs 148.34 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.401,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 148.34179999888875,
+      "best_round": 2,
+      "best_ms": 62.220899999374524,
+      "best_speedup": 2.3841153053134874,
+      "best_kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    s = src.astype(np.float32)\n\n    sy = np.clip((np.arange(out_h) + 0.5) * sh / out_h - 0.5, 0, sh - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    wy = (sy - y0).astype(np.float32)[:, None, None]\n    rows = s[y0] * (1 - wy) + s[y1] * wy\n\n    sx = np.clip((np.arange(out_w) + 0.5) * sw / out_w - 0.5, 0, sw - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wx = (sx - x0).astype(np.float32)[None, :, None]\n    out = rows[:, x0] * (1 - wx) + rows[:, x1] * wx\n\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.0
+    },
+    {
+      "task_id": "glyph_atlas_blit",
+      "provider": "offline",
+      "model": "replay-pool",
+      "use_advisor": true,
+      "max_rounds": 4,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    for i in range(len(gid)):\n        y0 = int(round(float(gy[i]))); x0 = int(round(float(gx[i])))\n        cov = atlas[gid[i]].astype(np.float64) / 255.0\n        tile = out[y0:y0 + gh, x0:x0 + gw]\n        a = cov[..., None]\n        tile *= (1.0 - a)\n        tile += a * rgb[i].astype(np.float64)\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "Snap each glyph to the nearest integer pixel so the blit is a plain slice -- the sub-pixel offset should be visually negligible.",
+          "judge": {
+            "pass": false,
+            "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.71552 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.11023 (cap 0.001)",
+            "timing": null,
+            "stage": "correctness",
+            "task_id": "glyph_atlas_blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.71552 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.11023 (cap 0.001)",
+              "metrics": {
+                "ssim": 0.7155209068750876,
+                "max_pixel_err": 1.0,
+                "bad_frac": 0.11022567749023438
+              }
+            },
+            "timing_detail": {}
+          },
+          "critique": "Structurally wrong output: SSIM 0.7155 is below the 0.990 floor; worst pixel is off by 1.000 (cap 0.060); 11.02% of pixels exceed the per-pixel cap (limit 2%). Errors concentrated at glyph edges mean the sub-pixel offset is being discarded rather than resampled.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.596,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    n, gh, gw = atlas.shape\n    for i in range(len(gid)):\n        y0 = int(np.floor(gy[i])); x0 = int(np.floor(gx[i]))\n        fy = float(gy[i]) - y0; fx = float(gx[i]) - x0\n\n        pad = np.zeros((gh + 1, gw + 1), dtype=np.float64)\n        pad[:gh, :gw] = atlas[gid[i]]\n        cov = (pad[:gh, :gw] * (1 - fy) * (1 - fx)\n               + pad[1:, :gw] * fy * (1 - fx)\n               + pad[:gh, 1:] * (1 - fy) * fx\n               + pad[1:, 1:] * fy * fx) / 255.0\n\n        tile = out[y0:y0 + gh, x0:x0 + gw]\n        a = cov[..., None]\n        tile *= (1.0 - a)\n        tile += a * rgb[i].astype(np.float64)\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "Restore the sub-pixel resample: pad the coverage and blend the four shifted taps per glyph before compositing.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 42.9636999979266,
+            "stage": "done",
+            "task_id": "glyph_atlas_blit",
+            "speedup": 1.0201972828445638,
+            "baseline_ms": 43.831449998833705,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+              "metrics": {
+                "ssim": 1.0,
+                "max_pixel_err": 0.0,
+                "bad_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 42.9636999979266,
+              "mean_ms": 42.89077500015992,
+              "p05_ms": 41.2547000014456,
+              "p95_ms": 44.7721000018646,
+              "iqr_ms": 1.6736999968998134,
+              "cv": 0.027583049676669098,
+              "trials": 8,
+              "samples_ms": [
+                41.2547,
+                41.2682,
+                42.2305,
+                42.7367,
+                43.1907,
+                43.7691,
+                43.9042,
+                44.7721
+              ]
+            }
+          },
+          "critique": "Correct, and 1.02x the naive baseline (42.96 ms vs 43.83 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.049,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float64)[:, None, None]\n    fx = (gx - x0).astype(np.float64)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float64)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * (1 - fy) * (1 - fx)\n           + pad[:, 1:, :gw] * fy * (1 - fx)\n           + pad[:, :gh, 1:] * (1 - fy) * fx\n           + pad[:, 1:, 1:] * fy * fx)\n    cov *= (1.0 / 255.0)\n\n    colours = rgb.astype(np.float64)\n    for i in range(m):\n        a = cov[i][..., None]\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= (1.0 - a)\n        tile += a * colours[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "The resample is per-glyph but independent, so lift it out of the loop: gather every glyph into one (n, gh+1, gw+1) padded stack and compute all coverages in four vectorised terms. Only the order-dependent blend stays in Python.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 39.576700000907294,
+            "stage": "done",
+            "task_id": "glyph_atlas_blit",
+            "speedup": 1.1075064368132985,
+            "baseline_ms": 43.831449998833705,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+              "metrics": {
+                "ssim": 1.0,
+                "max_pixel_err": 0.0,
+                "bad_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 39.576700000907294,
+              "mean_ms": 40.371699999923294,
+              "p05_ms": 37.24330000113696,
+              "p95_ms": 48.3336999968742,
+              "iqr_ms": 2.1340000021154992,
+              "cv": 0.07888412058413458,
+              "trials": 8,
+              "samples_ms": [
+                37.2433,
+                38.4335,
+                38.8009,
+                39.3985,
+                39.7549,
+                40.0739,
+                40.9349,
+                48.3337
+              ]
+            }
+          },
+          "critique": "Correct, and 1.11x the naive baseline (39.58 ms vs 43.83 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.034,
+          "parse_failed": false
+        },
+        {
+          "index": 3,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float32).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float32)[:, None, None]\n    fx = (gx - x0).astype(np.float32)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float32)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * ((1 - fy) * (1 - fx))\n           + pad[:, 1:, :gw] * (fy * (1 - fx))\n           + pad[:, :gh, 1:] * ((1 - fy) * fx)\n           + pad[:, 1:, 1:] * (fy * fx))\n    cov *= np.float32(1.0 / 255.0)\n\n    inv = 1.0 - cov\n    pre = cov[..., None] * rgb.astype(np.float32)[:, None, None, :]\n\n    for i in range(m):\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= inv[i][..., None]\n        tile += pre[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "Fold the colour into the coverage once (premultiply) so the inner blend is a single fused multiply-add on a (gh, gw, 3) tile, and keep the coverage stack in float32 to halve the bandwidth of the batched resample.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 28.20225000323262,
+            "stage": "done",
+            "task_id": "glyph_atlas_blit",
+            "speedup": 1.5541827334276386,
+            "baseline_ms": 43.831449998833705,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "ssim=1.00000 (floor 0.998) max_px=0.0039 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+              "metrics": {
+                "ssim": 0.9999999997521245,
+                "max_pixel_err": 0.0039215686274509665,
+                "bad_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 28.20225000323262,
+              "mean_ms": 28.830500002186454,
+              "p05_ms": 27.15540000644978,
+              "p95_ms": 33.55649999866728,
+              "iqr_ms": 1.5840999985812232,
+              "cv": 0.0658375396262658,
+              "trials": 8,
+              "samples_ms": [
+                27.1554,
+                27.6348,
+                27.9536,
+                28.1319,
+                28.2726,
+                28.4015,
+                29.5377,
+                33.5565
+              ]
+            }
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.89,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 43.831449998833705,
+      "best_round": 3,
+      "best_ms": 28.20225000323262,
+      "best_speedup": 1.5541827334276386,
+      "best_kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float32).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float32)[:, None, None]\n    fx = (gx - x0).astype(np.float32)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float32)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * ((1 - fy) * (1 - fx))\n           + pad[:, 1:, :gw] * (fy * (1 - fx))\n           + pad[:, :gh, 1:] * ((1 - fy) * fx)\n           + pad[:, 1:, 1:] * (fy * fx))\n    cov *= np.float32(1.0 / 255.0)\n\n    inv = 1.0 - cov\n    pre = cov[..., None] * rgb.astype(np.float32)[:, None, None, :]\n\n    for i in range(m):\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= inv[i][..., None]\n        tile += pre[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.0
+    },
+    {
+      "task_id": "text_page_raster",
+      "provider": "offline",
+      "model": "replay-pool",
+      "use_advisor": true,
+      "max_rounds": 4,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    for i in range(len(gid)):\n        y0 = int(round(float(gy[i]))); x0 = int(round(float(gx[i])))\n        cov = atlas[gid[i]].astype(np.float64) / 255.0\n        tile = out[y0:y0 + gh, x0:x0 + gw]\n        a = cov[..., None]\n        tile *= (1.0 - a)\n        tile += a * rgb[i].astype(np.float64)\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "Snap each glyph to the nearest integer pixel so the blit is a plain slice -- the sub-pixel offset should be visually negligible.",
+          "judge": {
+            "pass": false,
+            "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.59629 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.41283 (cap 0.001)",
+            "timing": null,
+            "stage": "correctness",
+            "task_id": "text_page_raster",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.59629 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.41283 (cap 0.001)",
+              "metrics": {
+                "ssim": 0.5962890582388836,
+                "max_pixel_err": 1.0,
+                "bad_frac": 0.4128313030638612
+              }
+            },
+            "timing_detail": {}
+          },
+          "critique": "Structurally wrong output: SSIM 0.5963 is below the 0.990 floor; worst pixel is off by 1.000 (cap 0.060); 41.28% of pixels exceed the per-pixel cap (limit 2%). Errors concentrated at glyph edges mean the sub-pixel offset is being discarded rather than resampled.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 0.716,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    n, gh, gw = atlas.shape\n    for i in range(len(gid)):\n        y0 = int(np.floor(gy[i])); x0 = int(np.floor(gx[i]))\n        fy = float(gy[i]) - y0; fx = float(gx[i]) - x0\n\n        pad = np.zeros((gh + 1, gw + 1), dtype=np.float64)\n        pad[:gh, :gw] = atlas[gid[i]]\n        cov = (pad[:gh, :gw] * (1 - fy) * (1 - fx)\n               + pad[1:, :gw] * fy * (1 - fx)\n               + pad[:gh, 1:] * (1 - fy) * fx\n               + pad[1:, 1:] * fy * fx) / 255.0\n\n        tile = out[y0:y0 + gh, x0:x0 + gw]\n        a = cov[..., None]\n        tile *= (1.0 - a)\n        tile += a * rgb[i].astype(np.float64)\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "Restore the sub-pixel resample: pad the coverage and blend the four shifted taps per glyph before compositing.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 182.24109999573557,
+            "stage": "done",
+            "task_id": "text_page_raster",
+            "speedup": 1.0356824010064911,
+            "baseline_ms": 188.74390000564745,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+              "metrics": {
+                "ssim": 1.0,
+                "max_pixel_err": 0.0,
+                "bad_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 182.24109999573557,
+              "mean_ms": 182.06113999913214,
+              "p05_ms": 170.6525999979931,
+              "p95_ms": 192.95270000293385,
+              "iqr_ms": 11.300099991785828,
+              "cv": 0.04343830896031177,
+              "trials": 5,
+              "samples_ms": [
+                170.6526,
+                176.5796,
+                182.2411,
+                187.8797,
+                192.9527
+              ]
+            }
+          },
+          "critique": "Correct, and 1.04x the naive baseline (182.24 ms vs 188.74 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.873,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float64)[:, None, None]\n    fx = (gx - x0).astype(np.float64)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float64)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * (1 - fy) * (1 - fx)\n           + pad[:, 1:, :gw] * fy * (1 - fx)\n           + pad[:, :gh, 1:] * (1 - fy) * fx\n           + pad[:, 1:, 1:] * fy * fx)\n    cov *= (1.0 / 255.0)\n\n    colours = rgb.astype(np.float64)\n    for i in range(m):\n        a = cov[i][..., None]\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= (1.0 - a)\n        tile += a * colours[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "The resample is per-glyph but independent, so lift it out of the loop: gather every glyph into one (n, gh+1, gw+1) padded stack and compute all coverages in four vectorised terms. Only the order-dependent blend stays in Python.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 166.40950000146404,
+            "stage": "done",
+            "task_id": "text_page_raster",
+            "speedup": 1.1342134914412152,
+            "baseline_ms": 188.74390000564745,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+              "metrics": {
+                "ssim": 1.0,
+                "max_pixel_err": 0.0,
+                "bad_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 166.40950000146404,
+              "mean_ms": 167.58133999974234,
+              "p05_ms": 163.06140000233427,
+              "p95_ms": 176.53469999640947,
+              "iqr_ms": 1.9577000057324767,
+              "cv": 0.027887050563933518,
+              "trials": 5,
+              "samples_ms": [
+                163.0614,
+                164.9717,
+                166.4095,
+                166.9294,
+                176.5347
+              ]
+            }
+          },
+          "critique": "Correct, and 1.13x the naive baseline (166.41 ms vs 188.74 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.776,
+          "parse_failed": false
+        },
+        {
+          "index": 3,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float32).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float32)[:, None, None]\n    fx = (gx - x0).astype(np.float32)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float32)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * ((1 - fy) * (1 - fx))\n           + pad[:, 1:, :gw] * (fy * (1 - fx))\n           + pad[:, :gh, 1:] * ((1 - fy) * fx)\n           + pad[:, 1:, 1:] * (fy * fx))\n    cov *= np.float32(1.0 / 255.0)\n\n    inv = 1.0 - cov\n    pre = cov[..., None] * rgb.astype(np.float32)[:, None, None, :]\n\n    for i in range(m):\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= inv[i][..., None]\n        tile += pre[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+          "coder_note": "Fold the colour into the coverage once (premultiply) so the inner blend is a single fused multiply-add on a (gh, gw, 3) tile, and keep the coverage stack in float32 to halve the bandwidth of the batched resample.",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 116.081000000122,
+            "stage": "done",
+            "task_id": "text_page_raster",
+            "speedup": 1.6259672125967994,
+            "baseline_ms": 188.74390000564745,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "ssim=1.00000 (floor 0.998) max_px=0.0000 (cap 0.1) bad_frac=0.00000 (cap 0.001)",
+              "metrics": {
+                "ssim": 1.0,
+                "max_pixel_err": 0.0,
+                "bad_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 116.081000000122,
+              "mean_ms": 115.8129800009192,
+              "p05_ms": 108.78640000009909,
+              "p95_ms": 120.10569999984,
+              "iqr_ms": 2.9305999996722676,
+              "cv": 0.03348770952046144,
+              "trials": 5,
+              "samples_ms": [
+                108.7864,
+                115.5806,
+                116.081,
+                118.5112,
+                120.1057
+              ]
+            }
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 1.427,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 188.74390000564745,
+      "best_round": 3,
+      "best_ms": 116.081000000122,
+      "best_speedup": 1.6259672125967994,
+      "best_kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float32).copy()\n    n, gh, gw = atlas.shape\n    m = len(gid)\n\n    y0 = np.floor(gy).astype(np.int64)\n    x0 = np.floor(gx).astype(np.int64)\n    fy = (gy - y0).astype(np.float32)[:, None, None]\n    fx = (gx - x0).astype(np.float32)[:, None, None]\n\n    pad = np.zeros((m, gh + 1, gw + 1), dtype=np.float32)\n    pad[:, :gh, :gw] = atlas[gid]\n\n    cov = (pad[:, :gh, :gw] * ((1 - fy) * (1 - fx))\n           + pad[:, 1:, :gw] * (fy * (1 - fx))\n           + pad[:, :gh, 1:] * ((1 - fy) * fx)\n           + pad[:, 1:, 1:] * (fy * fx))\n    cov *= np.float32(1.0 / 255.0)\n\n    inv = 1.0 - cov\n    pre = cov[..., None] * rgb.astype(np.float32)[:, None, None, :]\n\n    for i in range(m):\n        tile = out[y0[i]:y0[i] + gh, x0[i]:x0[i] + gw]\n        tile *= inv[i][..., None]\n        tile += pre[i]\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.0
+    }
+  ]
+}

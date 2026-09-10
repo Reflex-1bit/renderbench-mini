@@ -1,0 +1,153 @@
+{
+  "task_id": "bilinear_resize",
+  "provider": "offline",
+  "model": "replay-pool",
+  "use_advisor": true,
+  "max_rounds": 4,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    sy = np.arange(out_h) * (sh - 1) / (out_h - 1)\n    sx = np.arange(out_w) * (sw - 1) / (out_w - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wy = (sy - y0)[:, None, None]; wx = (sx - x0)[None, :, None]\n    s = src.astype(np.float64)\n    top = s[y0][:, x0] * (1 - wx) + s[y0][:, x1] * wx\n    bot = s[y1][:, x0] * (1 - wx) + s[y1][:, x1] * wx\n    return np.clip(np.rint(top * (1 - wy) + bot * wy), 0, 255).astype(np.uint8)",
+      "coder_note": "Vectorise with a coordinate grid over the full source extent.",
+      "judge": {
+        "pass": false,
+        "error": "max abs err 99 vs atol 1",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "bilinear_resize",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "tolerance",
+          "detail": "max abs err 99 vs atol 1",
+          "metrics": {
+            "max_abs_err": 99.0,
+            "atol": 1.0,
+            "over_tol_frac": 0.9092528025309244
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "Exceeds the allowed tolerance: max abs error 99 against a cap of 1, over 90.93% of elements. The deviation is systematic, so check the formula and the sampling convention, not the precision.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 0.711,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    sy = np.clip((np.arange(out_h) + 0.5) * sh / out_h - 0.5, 0, sh - 1)\n    sx = np.clip((np.arange(out_w) + 0.5) * sw / out_w - 0.5, 0, sw - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wy = (sy - y0)[:, None, None]; wx = (sx - x0)[None, :, None]\n    s = src.astype(np.float64)\n    top = s[y0][:, x0] * (1 - wx) + s[y0][:, x1] * wx\n    bot = s[y1][:, x0] * (1 - wx) + s[y1][:, x1] * wx\n    return np.clip(np.rint(top * (1 - wy) + bot * wy), 0, 255).astype(np.uint8)",
+      "coder_note": "Switch to half-pixel centres and clamp before flooring, per the spec.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 205.6099000001268,
+        "stage": "done",
+        "task_id": "bilinear_resize",
+        "speedup": 0.7214720691892621,
+        "baseline_ms": 148.34179999888875,
+        "oracle": {
+          "mode": "tolerance",
+          "detail": "max abs err 0 vs atol 1",
+          "metrics": {
+            "max_abs_err": 0.0,
+            "atol": 1.0,
+            "over_tol_frac": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 205.6099000001268,
+          "mean_ms": 199.21967000045697,
+          "p05_ms": 174.3228999985149,
+          "p95_ms": 211.08249999815598,
+          "iqr_ms": 13.75440000265371,
+          "cv": 0.05702916589369997,
+          "trials": 10,
+          "samples_ms": [
+            174.3229,
+            186.0673,
+            192.7299,
+            194.4362,
+            205.0349,
+            206.1849,
+            206.2684,
+            206.4843,
+            209.5854,
+            211.0825
+          ]
+        }
+      },
+      "critique": "Correct, and 0.72x the naive baseline (205.61 ms vs 148.34 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 3.289,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    s = src.astype(np.float32)\n\n    sy = np.clip((np.arange(out_h) + 0.5) * sh / out_h - 0.5, 0, sh - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    wy = (sy - y0).astype(np.float32)[:, None, None]\n    rows = s[y0] * (1 - wy) + s[y1] * wy\n\n    sx = np.clip((np.arange(out_w) + 0.5) * sw / out_w - 0.5, 0, sw - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wx = (sx - x0).astype(np.float32)[None, :, None]\n    out = rows[:, x0] * (1 - wx) + rows[:, x1] * wx\n\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+      "coder_note": "The 4-tap gather materialises four full float64 pages. Do it separably instead: interpolate rows into an (out_h, sw) intermediate, then columns. float32 stays inside the 1-code-value budget.",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 62.220899999374524,
+        "stage": "done",
+        "task_id": "bilinear_resize",
+        "speedup": 2.3841153053134874,
+        "baseline_ms": 148.34179999888875,
+        "oracle": {
+          "mode": "tolerance",
+          "detail": "max abs err 0 vs atol 1",
+          "metrics": {
+            "max_abs_err": 0.0,
+            "atol": 1.0,
+            "over_tol_frac": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 62.220899999374524,
+          "mean_ms": 63.391250000859145,
+          "p05_ms": 57.10640000324929,
+          "p95_ms": 73.60830000106944,
+          "iqr_ms": 2.5250000035157427,
+          "cv": 0.06580192581215455,
+          "trials": 10,
+          "samples_ms": [
+            57.1064,
+            60.9816,
+            61.49,
+            61.7423,
+            62.0129,
+            62.4289,
+            63.2962,
+            64.015,
+            67.2309,
+            73.6083
+          ]
+        }
+      },
+      "critique": "Correct, and 2.38x the naive baseline (62.22 ms vs 148.34 ms). Remaining headroom is in memory traffic: look at the dtype width of the intermediates, how many full-size temporaries are allocated per call, and whether any per-element work can be hoisted out of a Python-level loop or precomputed at module scope.",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 1.401,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 148.34179999888875,
+  "best_round": 2,
+  "best_ms": 62.220899999374524,
+  "best_speedup": 2.3841153053134874,
+  "best_kernel": "import numpy as np\n\ndef kernel(src, out_h, out_w):\n    out_h, out_w = int(out_h), int(out_w)\n    sh, sw = src.shape[:2]\n    s = src.astype(np.float32)\n\n    sy = np.clip((np.arange(out_h) + 0.5) * sh / out_h - 0.5, 0, sh - 1)\n    y0 = np.floor(sy).astype(np.int64); y1 = np.minimum(y0 + 1, sh - 1)\n    wy = (sy - y0).astype(np.float32)[:, None, None]\n    rows = s[y0] * (1 - wy) + s[y1] * wy\n\n    sx = np.clip((np.arange(out_w) + 0.5) * sw / out_w - 0.5, 0, sw - 1)\n    x0 = np.floor(sx).astype(np.int64); x1 = np.minimum(x0 + 1, sw - 1)\n    wx = (sx - x0).astype(np.float32)[None, :, None]\n    out = rows[:, x0] * (1 - wx) + rows[:, x1] * wx\n\n    return np.clip(np.rint(out), 0, 255).astype(np.uint8)",
+  "solved": true,
+  "rounds_to_first_pass": 1,
+  "cost_usd": 0.0
+}
