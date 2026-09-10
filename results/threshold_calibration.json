@@ -1,0 +1,62 @@
+{
+  "task": "glyph_atlas_blit",
+  "seed": 20260909,
+  "thresholds": {
+    "min_ssim": 0.998,
+    "max_pixel_err": 0.1,
+    "max_bad_frac": 0.001
+  },
+  "justification": "Anti-aliased coverage placed at a fractional offset has no bit-reproducible answer: direct bilinear resampling and area-averaged supersampling are both defensible implementations. The admissible set is therefore defined by a property rather than by an algorithm -- an implementation passes if it resolves sub-pixel phase to 1/8 px or finer and loses no coverage. The three thresholds were fitted to that rule by calibrate_thresholds.py, which confirms they admit exact bilinear and 1/8-px supersampling while rejecting 1/4-px phase quantisation, nearest-neighbour snapping, and a dropped glyph. Calibrated before any experiment was run; frozen since.",
+  "all_probes_separated": true,
+  "ssim_margin": -2.5591623127318996e-05,
+  "caught_only_by_caps": [
+    "drop-one-glyph"
+  ],
+  "probes": [
+    {
+      "probe": "bilinear-f32",
+      "expected_pass": true,
+      "actual_pass": true,
+      "separates": true,
+      "ssim": 0.999999998978038,
+      "max_pixel_err": 0.0039215686274510775,
+      "bad_frac": 0.0
+    },
+    {
+      "probe": "supersample-8x",
+      "expected_pass": true,
+      "actual_pass": true,
+      "separates": true,
+      "ssim": 0.9992774509615533,
+      "max_pixel_err": 0.08235294117647059,
+      "bad_frac": 0.0
+    },
+    {
+      "probe": "supersample-4x",
+      "expected_pass": false,
+      "actual_pass": false,
+      "separates": true,
+      "ssim": 0.997299949608176,
+      "max_pixel_err": 0.17647058823529416,
+      "bad_frac": 0.0004514058430989583
+    },
+    {
+      "probe": "nearest-snap",
+      "expected_pass": false,
+      "actual_pass": false,
+      "separates": true,
+      "ssim": 0.7155209068750876,
+      "max_pixel_err": 1.0,
+      "bad_frac": 0.11022567749023438
+    },
+    {
+      "probe": "drop-one-glyph",
+      "expected_pass": false,
+      "actual_pass": false,
+      "separates": true,
+      "ssim": 0.9993030425846806,
+      "max_pixel_err": 0.7686274509803921,
+      "bad_frac": 0.000186920166015625
+    }
+  ]
+}
