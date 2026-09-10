@@ -1,0 +1,6 @@
+# dashboard.html embeds two PNG figures as base64 data URIs so the results
+# report is a single self-contained file. That inflates its raw byte count
+# past all the actual Python source combined, which skews GitHub's language
+# detection to "HTML" for what is a Python project. linguist-generated tells
+# it to count the bytes but exclude the file from the language stats.
+dashboard.html linguist-generated=true
