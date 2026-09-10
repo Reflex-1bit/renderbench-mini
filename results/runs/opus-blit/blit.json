@@ -1,0 +1,182 @@
+{
+  "task_id": "blit",
+  "provider": "live",
+  "model": "claude-opus-5",
+  "use_advisor": true,
+  "max_rounds": 3,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # destination window\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    out = dst.copy()\n    if y1 <= y0 or x1 <= x0:\n        return out\n\n    sy0 = y0 - dy\n    sx0 = x0 - dx\n    out[y0:y1, x0:x1] = src[sy0:sy0 + (y1 - y0), sx0:sx0 + (x1 - x0)]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 1.3035000010859221,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 8.68761027387765,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 1.3035000010859221,
+          "mean_ms": 1.2922733323648572,
+          "p05_ms": 1.1686999932862818,
+          "p95_ms": 1.6853000124683604,
+          "iqr_ms": 0.1469000126235187,
+          "cv": 0.09887743817434085,
+          "trials": 15,
+          "samples_ms": [
+            1.1687,
+            1.1852,
+            1.1866,
+            1.1898,
+            1.196,
+            1.2055,
+            1.2136,
+            1.3035,
+            1.3131,
+            1.3194,
+            1.3305,
+            1.3367,
+            1.3579,
+            1.3923,
+            1.6853
+          ]
+        }
+      },
+      "critique": "PASS, and the logic is already the right shape (window computed in destination space, source offsets derived from the clipped window). The only real headroom left is memory traffic: you write the overlap region twice \u2014 once by `dst.copy()` (H\u00b7W\u00b74 bytes) and again by the `out[y0:y1, x0:x1] = src[...]` assignment. Since the blit is large relative to `dst`, that duplicated store is a measurable fraction of the 1.3 ms.\n\nReplace `dst.copy()` with `np.empty_like(dst)` and fill only the four border bands around the clipped window (rows `0:y0`, rows `y1:H`, then `y0:y1, 0:x0` and `y0:y1, x1:W`), then write the src slice into the hole. Total bytes stored drops to exactly H\u00b7W\u00b74. Keep the early-out path (empty window \u21d2 plain copy) so degenerate clips stay correct.\n\nAlso consider `.view(np.uint32)` on both arrays before copying: quarter the item count for NumPy's strided copy loop, same bytes, bit-identical.",
+      "usage": {
+        "prompt_tokens": 1763,
+        "completion_tokens": 1235,
+        "cost_usd": 0.03969
+      },
+      "wall_s": 22.485,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n    dy = int(dy)\n    dx = int(dx)\n\n    # clipped window in destination space\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    # nothing visible -> plain copy\n    if y1 <= y0 or x1 <= x0 or sh == 0 or sw == 0:\n        return dst.copy()\n\n    out = np.empty(dst.shape, dtype=dst.dtype)\n\n    # widen to uint32 when layout permits: same bytes, 1/4 the item count\n    use32 = (\n        dst.ndim == 3\n        and src.ndim == 3\n        and dst.dtype == np.uint8\n        and src.dtype == np.uint8\n        and dst.shape[2] == 4\n        and src.shape[2] == 4\n        and dst.flags.c_contiguous\n        and src.flags.c_contiguous\n    )\n    if use32:\n        d = dst.view(np.uint32)\n        s = src.view(np.uint32)\n        o = out.view(np.uint32)\n    else:\n        d = dst\n        s = src\n        o = out\n\n    # top / bottom bands (full width)\n    if y0:\n        o[:y0] = d[:y0]\n    if y1 < H:\n        o[y1:] = d[y1:]\n\n    mo = o[y0:y1]\n    md = d[y0:y1]\n\n    # left / right bands inside the window rows\n    if x0:\n        mo[:, :x0] = md[:, :x0]\n    if x1 < W:\n        mo[:, x1:] = md[:, x1:]\n\n    # the hole gets the clipped source region\n    mo[:, x0:x1] = s[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.9464000031584874,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 11.96565930224028,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.9464000031584874,
+          "mean_ms": 0.93356666523808,
+          "p05_ms": 0.6883000023663044,
+          "p95_ms": 0.9903000027406961,
+          "iqr_ms": 0.04740001168102026,
+          "cv": 0.07570241809502153,
+          "trials": 15,
+          "samples_ms": [
+            0.6883,
+            0.8858,
+            0.9231,
+            0.9259,
+            0.9389,
+            0.9394,
+            0.944,
+            0.9464,
+            0.9525,
+            0.9613,
+            0.9706,
+            0.9733,
+            0.9787,
+            0.985,
+            0.9903
+          ]
+        }
+      },
+      "critique": "**Largest remaining headroom: the band-copy strategy.**\n\nYou allocate `np.empty` and then reconstruct `dst` from four slices. The top/bottom bands are contiguous memcpys, but `mo[:, :x0]` and `mo[:, x1:]` are column slices \u2014 NumPy issues one short memcpy per row (thousands of calls, each a few hundred bytes), which is far slower per byte than one bulk copy. Replace the empty+4-band scheme with a single `out = dst.copy()` (one contiguous whole-buffer memcpy, near peak bandwidth) followed by writing only the clipped source window. You re-touch the window region twice, but that region is smaller than the full frame and the saved strided-row overhead dominates.\n\nSecond, minor: `dst.view(np.uint32)` yields shape `(H, W, 1)`; `.reshape(H, W)` before slicing cuts one level of iterator nesting on the window copy. Also drop the redundant `sh==0/sw==0` test \u2014 already implied by `y1<=y0`.",
+      "usage": {
+        "prompt_tokens": 2693,
+        "completion_tokens": 3133,
+        "cost_usd": 0.09179
+      },
+      "wall_s": 39.884,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = dst.copy()\n\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Destination window\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    x1 = dx + sw\n    if y1 > H:\n        y1 = H\n    if x1 > W:\n        x1 = W\n\n    if y1 <= y0 or x1 <= x0:\n        return out\n\n    # Corresponding source window\n    sy0 = y0 - dy\n    sx0 = x0 - dx\n    sy1 = sy0 + (y1 - y0)\n    sx1 = sx0 + (x1 - x0)\n\n    if dst.flags.c_contiguous and src.flags.c_contiguous:\n        ov = out.view(np.uint32).reshape(H, W)\n        sv = src.view(np.uint32).reshape(sh, sw)\n        ov[y0:y1, x0:x1] = sv[sy0:sy1, sx0:sx1]\n    else:\n        out[y0:y1, x0:x1] = src[sy0:sy1, sx0:sx1]\n\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 1.1009999871021137,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 10.285467878378183,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 1.1009999871021137,
+          "mean_ms": 1.2055466640352581,
+          "p05_ms": 0.970299995969981,
+          "p95_ms": 1.9438999879639596,
+          "iqr_ms": 0.3361999988555908,
+          "cv": 0.20152535815473904,
+          "trials": 15,
+          "samples_ms": [
+            0.9703,
+            1.0194,
+            1.0252,
+            1.0267,
+            1.0631,
+            1.0659,
+            1.082,
+            1.101,
+            1.1891,
+            1.1938,
+            1.1966,
+            1.3629,
+            1.3987,
+            1.4446,
+            1.9439
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 1298,
+        "completion_tokens": 468,
+        "cost_usd": 0.01819
+      },
+      "wall_s": 7.982,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 1,
+  "best_ms": 0.9464000031584874,
+  "best_speedup": 11.96565930224028,
+  "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n    dy = int(dy)\n    dx = int(dx)\n\n    # clipped window in destination space\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    # nothing visible -> plain copy\n    if y1 <= y0 or x1 <= x0 or sh == 0 or sw == 0:\n        return dst.copy()\n\n    out = np.empty(dst.shape, dtype=dst.dtype)\n\n    # widen to uint32 when layout permits: same bytes, 1/4 the item count\n    use32 = (\n        dst.ndim == 3\n        and src.ndim == 3\n        and dst.dtype == np.uint8\n        and src.dtype == np.uint8\n        and dst.shape[2] == 4\n        and src.shape[2] == 4\n        and dst.flags.c_contiguous\n        and src.flags.c_contiguous\n    )\n    if use32:\n        d = dst.view(np.uint32)\n        s = src.view(np.uint32)\n        o = out.view(np.uint32)\n    else:\n        d = dst\n        s = src\n        o = out\n\n    # top / bottom bands (full width)\n    if y0:\n        o[:y0] = d[:y0]\n    if y1 < H:\n        o[y1:] = d[y1:]\n\n    mo = o[y0:y1]\n    md = d[y0:y1]\n\n    # left / right bands inside the window rows\n    if x0:\n        mo[:, :x0] = md[:, :x0]\n    if x1 < W:\n        mo[:, x1:] = md[:, x1:]\n\n    # the hole gets the clipped source region\n    mo[:, x0:x1] = s[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.14966999999999997
+}

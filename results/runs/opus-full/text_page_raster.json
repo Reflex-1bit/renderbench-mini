@@ -1,0 +1,89 @@
+{
+  "task_id": "text_page_raster",
+  "provider": "live",
+  "model": "claude-opus-5",
+  "use_advisor": true,
+  "max_rounds": 3,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 184s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "text_page_raster",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "[advisor call failed: provider gave up after 17s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')]",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 200.487,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 17s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "text_page_raster",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "[advisor call failed: provider gave up after 16s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')]",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 33.17,
+      "parse_failed": true
+    },
+    {
+      "index": 2,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 17s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "text_page_raster",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 16.554,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 188.74390000564745,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.0
+}

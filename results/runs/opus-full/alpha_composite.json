@@ -1,0 +1,120 @@
+{
+  "task_id": "alpha_composite",
+  "provider": "live",
+  "model": "claude-opus-5",
+  "use_advisor": true,
+  "max_rounds": 3,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.86131949999253)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "alpha_composite",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "No kernel was emitted at all \u2014 the submission is empty and failed at parse, so there is nothing to diagnose in the code. The root cause is that the generation exceeded the time budget; the fix is to emit a short, complete function immediately rather than exploring alternatives.\n\nFor the next attempt, keep it to a handful of lines and get these mechanics right:\n\n- Compute `inv = 255 - src[..., 3]` once as a (H, W) array, then broadcast it against `dst` via `inv[..., None]`; do not tile or repeat it into four channels.\n- Promote to uint16, not int16: `dst.astype(np.uint16) * inv` peaks at 255*255 = 65025, which fits uint16 exactly but overflows int16.\n- Use `//= 255` (floor division), then add `src` in uint16 and let the sum, max 255+255, stay in range; no clip is needed since `src[c] + (dst[c]*(255-src[3]))//255` cannot exceed 255 for valid premultiplied input \u2014 but the spec demands clipping, so apply `np.minimum(..., 255)` before the final `.astype(np.uint8)` rather than trusting the invariant.\n- Allocate one output buffer; avoid intermediate `.astype` chains that copy the full (H, W, 4) array more than twice.",
+      "usage": {
+        "prompt_tokens": 735,
+        "completion_tokens": 503,
+        "cost_usd": 0.01625
+      },
+      "wall_s": 248.706,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    out = np.empty((H, W, 4), np.uint8)\n    if H == 0 or W == 0:\n        return out\n\n    # inv = 255 - src_alpha, as uint16, shaped (H, W, 1) for broadcasting\n    inv = (255 - src[..., 3].astype(np.uint16)).reshape(H, W, 1)\n\n    # Row block sized so the uint16 scratch buffers stay in L2 cache.\n    rows = 131072 // (W * 8)\n    if rows < 1:\n        rows = 1\n    if rows > H:\n        rows = H\n\n    buf = np.empty((rows, W, 4), np.uint16)\n    tmp = np.empty((rows, W, 4), np.uint16)\n\n    for i in range(0, H, rows):\n        j = i + rows\n        if j > H:\n            j = H\n        n = j - i\n        b = buf[:n]\n        t = tmp[:n]\n\n        # x = dst * inv        (max 255*255 = 65025, fits uint16)\n        np.multiply(dst[i:j], inv[i:j], out=b)\n        # floor(x / 255) == (x + (x >> 8) + 1) >> 8   for x <= 65025 (exact)\n        np.right_shift(b, 8, out=t)\n        np.add(b, t, out=b)\n        np.add(b, 1, out=b)\n        np.right_shift(b, 8, out=b)\n        # + src, then clip to 255\n        np.add(b, src[i:j], out=b)\n        np.minimum(b, 255, out=b)\n        np.copyto(out[i:j], b, casting='unsafe')\n\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 31.434799995622598,
+        "stage": "done",
+        "task_id": "alpha_composite",
+        "speedup": 2.097617926729668,
+        "baseline_ms": 65.93819999397965,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 31.434799995622598,
+          "mean_ms": 31.825580000683356,
+          "p05_ms": 29.38910000375472,
+          "p95_ms": 38.715000002412125,
+          "iqr_ms": 3.910700004780665,
+          "cv": 0.08034171443188023,
+          "trials": 15,
+          "samples_ms": [
+            29.3891,
+            29.3904,
+            29.4532,
+            29.53,
+            29.6382,
+            30.0794,
+            30.8642,
+            31.4348,
+            31.4902,
+            32.2585,
+            32.4991,
+            33.4407,
+            34.3119,
+            34.889,
+            38.715
+          ]
+        }
+      },
+      "critique": "[advisor call failed: provider gave up after 108s (deadline 240s): RuntimeError('empty response content (stop_reason=max_tokens)')]",
+      "usage": {
+        "prompt_tokens": 1400,
+        "completion_tokens": 7004,
+        "cost_usd": 0.1821
+      },
+      "wall_s": 285.877,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.85174119999283)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "alpha_composite",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 240.072,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 65.93819999397965,
+  "best_round": 1,
+  "best_ms": 31.434799995622598,
+  "best_speedup": 2.097617926729668,
+  "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    out = np.empty((H, W, 4), np.uint8)\n    if H == 0 or W == 0:\n        return out\n\n    # inv = 255 - src_alpha, as uint16, shaped (H, W, 1) for broadcasting\n    inv = (255 - src[..., 3].astype(np.uint16)).reshape(H, W, 1)\n\n    # Row block sized so the uint16 scratch buffers stay in L2 cache.\n    rows = 131072 // (W * 8)\n    if rows < 1:\n        rows = 1\n    if rows > H:\n        rows = H\n\n    buf = np.empty((rows, W, 4), np.uint16)\n    tmp = np.empty((rows, W, 4), np.uint16)\n\n    for i in range(0, H, rows):\n        j = i + rows\n        if j > H:\n            j = H\n        n = j - i\n        b = buf[:n]\n        t = tmp[:n]\n\n        # x = dst * inv        (max 255*255 = 65025, fits uint16)\n        np.multiply(dst[i:j], inv[i:j], out=b)\n        # floor(x / 255) == (x + (x >> 8) + 1) >> 8   for x <= 65025 (exact)\n        np.right_shift(b, 8, out=t)\n        np.add(b, t, out=b)\n        np.add(b, 1, out=b)\n        np.right_shift(b, 8, out=b)\n        # + src, then clip to 255\n        np.add(b, src[i:j], out=b)\n        np.minimum(b, 255, out=b)\n        np.copyto(out[i:j], b, casting='unsafe')\n\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 1,
+  "cost_usd": 0.19835000000000003
+}

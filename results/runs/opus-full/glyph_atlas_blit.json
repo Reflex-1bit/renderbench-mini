@@ -1,0 +1,97 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "live",
+  "model": "claude-opus-5",
+  "use_advisor": true,
+  "max_rounds": 3,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.817354600003455)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "No kernel was emitted \u2014 the generation call timed out before any code was produced, so there is nothing to diagnose. The single root cause is budget, not logic: aim for a short, direct implementation and stop.\n\nFor the next attempt, keep the structure minimal and mechanical:\n\n- Copy `page` once to float32 (H, W, 3), blend in place, `np.rint`/clip to uint8 at the end.\n- Precompute `iy = np.floor(gy).astype(int)`, `fy = gy - iy` (same for x) vectorised outside the loop, plus `atlas` as float32 once.\n- Per glyph, do exact bilinear: pad the (gh, gw) coverage by one row/column of zeros, then `c = (1-fy)*(1-fx)*A[:-1,:-1] + ...` over the four shifted views. That resolves phase exactly and loses no coverage \u2014 no supersampling needed.\n- Write into the `(gh+1, gw+1)` destination slice with `a = c/255`, broadcasting `rgb[i]` over the last axis.\n\nOne Python loop over glyphs is acceptable; order dependence forbids batching.",
+      "usage": {
+        "prompt_tokens": 1070,
+        "completion_tokens": 446,
+        "cost_usd": 0.0165
+      },
+      "wall_s": 249.563,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    page = np.asarray(page)\n    H, W = page.shape[0], page.shape[1]\n\n    out = page.astype(np.float32)\n\n    atlas = np.asarray(atlas)\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    # coverage pre-scaled to alpha in [0,1]\n    A = atlas.astype(np.float32)\n    A *= np.float32(1.0 / 255.0)\n\n    gid = np.asarray(gid).astype(np.intp, copy=False)\n    gyf = np.asarray(gy, dtype=np.float64)\n    gxf = np.asarray(gx, dtype=np.float64)\n\n    iy = np.floor(gyf).astype(np.intp)\n    ix = np.floor(gxf).astype(np.intp)\n    fy = (gyf - iy).astype(np.float32)\n    fx = (gxf - ix).astype(np.float32)\n\n    rgbf = np.asarray(rgb, dtype=np.float32)\n    if rgbf.ndim == 1:\n        rgbf = rgbf.reshape(1, -1)\n\n    bh, bw = gh + 1, gw + 1\n    buf = np.empty((bh, bw), np.float32)\n    tmp = np.empty((bh, bw, 3), np.float32)\n\n    n = gid.shape[0]\n    for i in range(n):\n        g = A[gid[i]]\n        a = fy[i]\n        b = fx[i]\n        oa = np.float32(1.0) - a\n        ob = np.float32(1.0) - b\n\n        # exact bilinear resample into (gh+1, gw+1) padded buffer\n        np.multiply(g, oa * ob, out=buf[:gh, :gw])\n        buf[gh, :] = 0.0\n        buf[:, gw] = 0.0\n        if b != 0.0:\n            buf[:gh, 1:] += g * (oa * b)\n        if a != 0.0:\n            buf[1:, :gw] += g * (a * ob)\n            if b != 0.0:\n                buf[1:, 1:] += g * (a * b)\n\n        y = iy[i]\n        x = ix[i]\n        h = bh if y + bh <= H else H - y\n        w = bw if x + bw <= W else W - x\n        if h <= 0 or w <= 0:\n            continue\n\n        dest = out[y:y + h, x:x + w]\n        t = tmp[:h, :w]\n        np.subtract(rgbf[i], dest, out=t)\n        t *= buf[:h, :w, None]\n        dest += t\n\n    np.rint(out, out=out)\n    return out.astype(np.uint8)",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.7458271927767557,
+            "max_pixel_err": 0.9725490196078431,
+            "bad_frac": 0.11052576700846355
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "[advisor call failed: provider gave up after 93s (deadline 240s): RuntimeError('empty response content (stop_reason=max_tokens)')]",
+      "usage": {
+        "prompt_tokens": 1683,
+        "completion_tokens": 3447,
+        "cost_usd": 0.09459
+      },
+      "wall_s": 132.612,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.88572310000018)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 240.06,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.11109000000000001
+}

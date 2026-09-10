@@ -1,0 +1,106 @@
+{
+  "tag": "opus-smoke",
+  "timestamp_utc": "20260910T054919Z",
+  "provider": "live",
+  "model": "anthropic/claude-opus-5",
+  "pinned_model_setting": "anthropic/claude-opus-5",
+  "prompt_version": "rb-mini-0.4",
+  "seed": 20260909,
+  "max_rounds": 2,
+  "advisor": true,
+  "advisor_ablation_supported": true,
+  "offline_disclaimer": null,
+  "environment": {
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 96 Stepping 0, AuthenticAMD",
+    "numpy": "2.5.1",
+    "torch": null,
+    "cuda_device": null,
+    "triton": null
+  },
+  "calibration": {
+    "all_probes_separated": true,
+    "thresholds": {
+      "min_ssim": 0.998,
+      "max_pixel_err": 0.1,
+      "max_bad_frac": 0.001
+    },
+    "ssim_margin": -2.5591623127318996e-05,
+    "caught_only_by_caps": [
+      "drop-one-glyph"
+    ]
+  },
+  "wall_s": 58.0,
+  "n_tasks": 1,
+  "n_solved": 0,
+  "geomean_speedup": 0.0,
+  "total_cost_usd": 0.0,
+  "tasks": [
+    {
+      "task_id": "blit",
+      "provider": "live",
+      "model": "anthropic/claude-opus-5",
+      "use_advisor": true,
+      "max_rounds": 2,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 19s (deadline 240s): HTTPError('403 Client Error: Forbidden for url: https://api.tokenrouter.com/v1/chat/completions')",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "[advisor call failed: provider gave up after 19s (deadline 240s): HTTPError('403 Client Error: Forbidden for url: https://api.tokenrouter.com/v1/chat/completions')]",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 38.799,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 19s (deadline 240s): HTTPError('403 Client Error: Forbidden for url: https://api.tokenrouter.com/v1/chat/completions')",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 19.243,
+          "parse_failed": true
+        }
+      ],
+      "baseline_ms": 11.324300001433585,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.0
+    }
+  ]
+}

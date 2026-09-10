@@ -1,0 +1,796 @@
+{
+  "tag": "opus-full",
+  "timestamp_utc": "20260910T055706Z",
+  "provider": "live",
+  "model": "claude-opus-5",
+  "pinned_model_setting": "claude-opus-5",
+  "prompt_version": "rb-mini-0.4",
+  "seed": 20260909,
+  "max_rounds": 3,
+  "advisor": true,
+  "advisor_ablation_supported": true,
+  "offline_disclaimer": null,
+  "environment": {
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 96 Stepping 0, AuthenticAMD",
+    "numpy": "2.5.1",
+    "torch": null,
+    "cuda_device": null,
+    "triton": null
+  },
+  "calibration": {
+    "all_probes_separated": true,
+    "thresholds": {
+      "min_ssim": 0.998,
+      "max_pixel_err": 0.1,
+      "max_bad_frac": 0.001
+    },
+    "ssim_margin": -2.5591623127318996e-05,
+    "caught_only_by_caps": [
+      "drop-one-glyph"
+    ]
+  },
+  "wall_s": 2658.8,
+  "n_tasks": 6,
+  "n_solved": 4,
+  "geomean_speedup": 4.266,
+  "total_cost_usd": 0.7573,
+  "tasks": [
+    {
+      "task_id": "blit",
+      "provider": "live",
+      "model": "claude-opus-5",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # destination window\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    out = dst.copy()\n    if y1 <= y0 or x1 <= x0:\n        return out\n\n    sy0 = y0 - dy\n    sx0 = x0 - dx\n    out[y0:y1, x0:x1] = src[sy0:sy0 + (y1 - y0), sx0:sx0 + (x1 - x0)]\n    return out",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 1.2799999967683107,
+            "stage": "done",
+            "task_id": "blit",
+            "speedup": 8.847109398456793,
+            "baseline_ms": 11.324300001433585,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 1.2799999967683107,
+              "mean_ms": 1.3080599970029045,
+              "p05_ms": 1.2297999928705394,
+              "p95_ms": 1.5719999937573448,
+              "iqr_ms": 0.12969999806955457,
+              "cv": 0.07053212020743273,
+              "trials": 15,
+              "samples_ms": [
+                1.2298,
+                1.2379,
+                1.2405,
+                1.2415,
+                1.2452,
+                1.2475,
+                1.2552,
+                1.28,
+                1.284,
+                1.2953,
+                1.2975,
+                1.3712,
+                1.3963,
+                1.427,
+                1.572
+              ]
+            }
+          },
+          "critique": "PASS, bit-identical, and the logic is already the right shape (clip in destination space, derive source offsets by subtraction, no negative-index hazard). At 1.28 ms you are purely memory-bandwidth bound, so the only headroom left is redundant memory traffic.\n\nRight now the blit window is written twice: once by `dst.copy()` (which memcpys all H\u00b7W\u00b74 bytes) and again by the `out[...] = src[...]` assignment. Instead allocate `np.empty_like(dst)`, then copy only the four surrounding bands from `dst` (rows `0:y0`, rows `y1:H`, and the two column strips `x0`-left / `x1`-right within `y0:y1`), and copy `src` straight into the window. That removes one write pass over the clipped area and the matching read of the `dst` pixels it overwrites.\n\nAdd a general fast path: if the window covers all of `dst`, skip the band copies entirely. Don't bother reinterpreting to uint32 \u2014 rows are already contiguous memcpys, so element width won't change the row count.",
+          "usage": {
+            "prompt_tokens": 1763,
+            "completion_tokens": 1357,
+            "cost_usd": 0.04274
+          },
+          "wall_s": 23.075,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    dy = int(dy)\n    dx = int(dx)\n\n    # Destination-space clipped window\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    x1 = dx + sw\n    if y1 > H:\n        y1 = H\n    if x1 > W:\n        x1 = W\n\n    if y1 <= y0 or x1 <= x0:\n        return dst.copy()\n\n    # Full coverage: the window is the whole destination -> pure src copy\n    if y0 == 0 and x0 == 0 and y1 == H and x1 == W:\n        out = np.empty_like(dst)\n        out[...] = src[-dy:H - dy, -dx:W - dx]\n        return out\n\n    out = np.empty_like(dst)\n\n    # Top band\n    if y0 > 0:\n        out[:y0] = dst[:y0]\n    # Bottom band\n    if y1 < H:\n        out[y1:] = dst[y1:]\n    # Left strip\n    if x0 > 0:\n        out[y0:y1, :x0] = dst[y0:y1, :x0]\n    # Right strip\n    if x1 < W:\n        out[y0:y1, x1:] = dst[y0:y1, x1:]\n\n    # Window from src\n    out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n    return out",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 0.7097999914549291,
+            "stage": "done",
+            "task_id": "blit",
+            "speedup": 15.954212648300173,
+            "baseline_ms": 11.324300001433585,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 0.7097999914549291,
+              "mean_ms": 0.7572466662774483,
+              "p05_ms": 0.6576000014320016,
+              "p95_ms": 0.956499992753379,
+              "iqr_ms": 0.16880000475794077,
+              "cv": 0.1293747065517528,
+              "trials": 15,
+              "samples_ms": [
+                0.6576,
+                0.6677,
+                0.6795,
+                0.6852,
+                0.6853,
+                0.6868,
+                0.6881,
+                0.7098,
+                0.7186,
+                0.7444,
+                0.8177,
+                0.854,
+                0.8913,
+                0.9162,
+                0.9565
+              ]
+            }
+          },
+          "critique": "PASS, bit-identical, and you're already close to the memory-bandwidth floor (one full-frame write plus the window), so the remaining headroom is in *how* the bytes move, not how many.\n\nMain issue: the left/right strips are copied as `(y1-y0)` separate memcpys of `x0*4` and `(W-x1)*4` bytes. When the clip overhang is a few pixels wide, that's thousands of sub-cacheline memcpys plus per-row loop overhead in numpy's copy machinery \u2014 the dominant non-bandwidth cost. Replace the four-band scheme with one contiguous `out[y0:y1] = dst[y0:y1]` (a single large memcpy alongside the top/bottom bands, or simply `out = dst.copy()`), then overwrite the window. You pay one extra strided write over the window region but delete two strided passes with tiny row chunks.\n\nSecondary: `.view(np.uint32)` on both arrays before the window assignment cuts",
+          "usage": {
+            "prompt_tokens": 2528,
+            "completion_tokens": 2082,
+            "cost_usd": 0.06469
+          },
+          "wall_s": 31.958,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    # One big contiguous memcpy for the untouched background...\n    out = np.copy(dst)\n\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Clipped destination window\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    if y1 <= y0 or x1 <= x0 or sh == 0 or sw == 0:\n        return out\n\n    # ...then a single strided overwrite of the window, 4 bytes per element.\n    if dst.dtype == np.uint8 and src.dtype == np.uint8 and dst.shape[2] == 4 and src.shape[2] == 4:\n        s = src if src.flags['C_CONTIGUOUS'] else np.ascontiguousarray(src)\n        out32 = out.view(np.uint32).reshape(H, W)\n        s32 = s.view(np.uint32).reshape(sh, sw)\n        ry0 = y0 - dy\n        rx0 = x0 - dx\n        if x0 == 0 and x1 == W and rx0 == 0 and sw == W:\n            # Fully contiguous run: one memcpy\n            out32.reshape(-1)[y0 * W:y1 * W] = s32.reshape(-1)[ry0 * W:(ry0 + (y1 - y0)) * W]\n        else:\n            out32[y0:y1, x0:x1] = s32[ry0:ry0 + (y1 - y0), rx0:rx0 + (x1 - x0)]\n    else:\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n\n    return out",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 0.9753000049386173,
+            "stage": "done",
+            "task_id": "blit",
+            "speedup": 11.611093965027,
+            "baseline_ms": 11.324300001433585,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 0.9753000049386173,
+              "mean_ms": 0.945613332442008,
+              "p05_ms": 0.6997000018600374,
+              "p95_ms": 1.0922000074060634,
+              "iqr_ms": 0.12489999062381685,
+              "cv": 0.11161009786899179,
+              "trials": 15,
+              "samples_ms": [
+                0.6997,
+                0.7267,
+                0.8672,
+                0.8872,
+                0.9656,
+                0.9676,
+                0.9682,
+                0.9753,
+                0.976,
+                0.9858,
+                0.9884,
+                1.0121,
+                1.0262,
+                1.046,
+                1.0922
+              ]
+            }
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 1272,
+            "completion_tokens": 1582,
+            "cost_usd": 0.04591
+          },
+          "wall_s": 19.17,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 11.324300001433585,
+      "best_round": 1,
+      "best_ms": 0.7097999914549291,
+      "best_speedup": 15.954212648300173,
+      "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    dy = int(dy)\n    dx = int(dx)\n\n    # Destination-space clipped window\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    x1 = dx + sw\n    if y1 > H:\n        y1 = H\n    if x1 > W:\n        x1 = W\n\n    if y1 <= y0 or x1 <= x0:\n        return dst.copy()\n\n    # Full coverage: the window is the whole destination -> pure src copy\n    if y0 == 0 and x0 == 0 and y1 == H and x1 == W:\n        out = np.empty_like(dst)\n        out[...] = src[-dy:H - dy, -dx:W - dx]\n        return out\n\n    out = np.empty_like(dst)\n\n    # Top band\n    if y0 > 0:\n        out[:y0] = dst[:y0]\n    # Bottom band\n    if y1 < H:\n        out[y1:] = dst[y1:]\n    # Left strip\n    if x0 > 0:\n        out[y0:y1, :x0] = dst[y0:y1, :x0]\n    # Right strip\n    if x1 < W:\n        out[y0:y1, x1:] = dst[y0:y1, x1:]\n\n    # Window from src\n    out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n    return out",
+      "solved": true,
+      "rounds_to_first_pass": 0,
+      "cost_usd": 0.15334
+    },
+    {
+      "task_id": "alpha_composite",
+      "provider": "live",
+      "model": "claude-opus-5",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.86131949999253)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "alpha_composite",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "No kernel was emitted at all \u2014 the submission is empty and failed at parse, so there is nothing to diagnose in the code. The root cause is that the generation exceeded the time budget; the fix is to emit a short, complete function immediately rather than exploring alternatives.\n\nFor the next attempt, keep it to a handful of lines and get these mechanics right:\n\n- Compute `inv = 255 - src[..., 3]` once as a (H, W) array, then broadcast it against `dst` via `inv[..., None]`; do not tile or repeat it into four channels.\n- Promote to uint16, not int16: `dst.astype(np.uint16) * inv` peaks at 255*255 = 65025, which fits uint16 exactly but overflows int16.\n- Use `//= 255` (floor division), then add `src` in uint16 and let the sum, max 255+255, stay in range; no clip is needed since `src[c] + (dst[c]*(255-src[3]))//255` cannot exceed 255 for valid premultiplied input \u2014 but the spec demands clipping, so apply `np.minimum(..., 255)` before the final `.astype(np.uint8)` rather than trusting the invariant.\n- Allocate one output buffer; avoid intermediate `.astype` chains that copy the full (H, W, 4) array more than twice.",
+          "usage": {
+            "prompt_tokens": 735,
+            "completion_tokens": 503,
+            "cost_usd": 0.01625
+          },
+          "wall_s": 248.706,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    out = np.empty((H, W, 4), np.uint8)\n    if H == 0 or W == 0:\n        return out\n\n    # inv = 255 - src_alpha, as uint16, shaped (H, W, 1) for broadcasting\n    inv = (255 - src[..., 3].astype(np.uint16)).reshape(H, W, 1)\n\n    # Row block sized so the uint16 scratch buffers stay in L2 cache.\n    rows = 131072 // (W * 8)\n    if rows < 1:\n        rows = 1\n    if rows > H:\n        rows = H\n\n    buf = np.empty((rows, W, 4), np.uint16)\n    tmp = np.empty((rows, W, 4), np.uint16)\n\n    for i in range(0, H, rows):\n        j = i + rows\n        if j > H:\n            j = H\n        n = j - i\n        b = buf[:n]\n        t = tmp[:n]\n\n        # x = dst * inv        (max 255*255 = 65025, fits uint16)\n        np.multiply(dst[i:j], inv[i:j], out=b)\n        # floor(x / 255) == (x + (x >> 8) + 1) >> 8   for x <= 65025 (exact)\n        np.right_shift(b, 8, out=t)\n        np.add(b, t, out=b)\n        np.add(b, 1, out=b)\n        np.right_shift(b, 8, out=b)\n        # + src, then clip to 255\n        np.add(b, src[i:j], out=b)\n        np.minimum(b, 255, out=b)\n        np.copyto(out[i:j], b, casting='unsafe')\n\n    return out",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 31.434799995622598,
+            "stage": "done",
+            "task_id": "alpha_composite",
+            "speedup": 2.097617926729668,
+            "baseline_ms": 65.93819999397965,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 31.434799995622598,
+              "mean_ms": 31.825580000683356,
+              "p05_ms": 29.38910000375472,
+              "p95_ms": 38.715000002412125,
+              "iqr_ms": 3.910700004780665,
+              "cv": 0.08034171443188023,
+              "trials": 15,
+              "samples_ms": [
+                29.3891,
+                29.3904,
+                29.4532,
+                29.53,
+                29.6382,
+                30.0794,
+                30.8642,
+                31.4348,
+                31.4902,
+                32.2585,
+                32.4991,
+                33.4407,
+                34.3119,
+                34.889,
+                38.715
+              ]
+            }
+          },
+          "critique": "[advisor call failed: provider gave up after 108s (deadline 240s): RuntimeError('empty response content (stop_reason=max_tokens)')]",
+          "usage": {
+            "prompt_tokens": 1400,
+            "completion_tokens": 7004,
+            "cost_usd": 0.1821
+          },
+          "wall_s": 285.877,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.85174119999283)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "alpha_composite",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 240.072,
+          "parse_failed": true
+        }
+      ],
+      "baseline_ms": 65.93819999397965,
+      "best_round": 1,
+      "best_ms": 31.434799995622598,
+      "best_speedup": 2.097617926729668,
+      "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    out = np.empty((H, W, 4), np.uint8)\n    if H == 0 or W == 0:\n        return out\n\n    # inv = 255 - src_alpha, as uint16, shaped (H, W, 1) for broadcasting\n    inv = (255 - src[..., 3].astype(np.uint16)).reshape(H, W, 1)\n\n    # Row block sized so the uint16 scratch buffers stay in L2 cache.\n    rows = 131072 // (W * 8)\n    if rows < 1:\n        rows = 1\n    if rows > H:\n        rows = H\n\n    buf = np.empty((rows, W, 4), np.uint16)\n    tmp = np.empty((rows, W, 4), np.uint16)\n\n    for i in range(0, H, rows):\n        j = i + rows\n        if j > H:\n            j = H\n        n = j - i\n        b = buf[:n]\n        t = tmp[:n]\n\n        # x = dst * inv        (max 255*255 = 65025, fits uint16)\n        np.multiply(dst[i:j], inv[i:j], out=b)\n        # floor(x / 255) == (x + (x >> 8) + 1) >> 8   for x <= 65025 (exact)\n        np.right_shift(b, 8, out=t)\n        np.add(b, t, out=b)\n        np.add(b, 1, out=b)\n        np.right_shift(b, 8, out=b)\n        # + src, then clip to 255\n        np.add(b, src[i:j], out=b)\n        np.minimum(b, 255, out=b)\n        np.copyto(out[i:j], b, casting='unsafe')\n\n    return out",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.19835000000000003
+    },
+    {
+      "task_id": "srgb_gamma",
+      "provider": "live",
+      "model": "claude-opus-5",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.84551500000816)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "No kernel was submitted \u2014 the source body is empty, so the parse stage had nothing to compile. The root cause is the generation timing out, not a rendering bug. The fix is to emit a short, complete implementation on the first pass rather than a long derivation.\n\nFor the next attempt, the whole job fits in a few lines: build a 4096-entry uint8 LUT once at module import (not inside `kernel`), by evaluating the piecewise formula on `np.linspace(0, 1, 4096)` with `np.where` on the 0.0031308 threshold, then `np.round(s * 255).clip(0, 255).astype(np.uint8)`. Inside `kernel`, index it with `np.clip(linear, 0.0, 1.0)` scaled by 4095 and converted with a single multiply-then-`astype(np.uint16)` \u2014 avoid `np.round` on the full image, avoid float64 intermediates, and avoid recomputing `linear * 4095` into a temporary more than once. Return the LUT gather directly; it is already the right shape and dtype.",
+          "usage": {
+            "prompt_tokens": 780,
+            "completion_tokens": 401,
+            "cost_usd": 0.013925
+          },
+          "wall_s": 247.581,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\n# 4096-entry LUT built once at import time.\n_v = np.linspace(0.0, 1.0, 4096, dtype=np.float64)\n_s = np.where(_v <= 0.0031308, 12.92 * _v, 1.055 * np.power(_v, 1.0 / 2.4) - 0.055)\n_LUT = np.clip(np.round(_s * 255.0), 0.0, 255.0).astype(np.uint8)\n\n\ndef kernel(linear: np.ndarray) -> np.ndarray:\n    a = np.asarray(linear, dtype=np.float32)\n    t = np.multiply(a, np.float32(4095.0), dtype=np.float32)\n    t += np.float32(0.5)\n    np.clip(t, 0.0, 4095.0, out=t)\n    idx = t.astype(np.uint16, copy=False)\n    return np.take(_LUT, idx)",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 34.50619999784976,
+            "stage": "done",
+            "task_id": "srgb_gamma",
+            "speedup": 2.529261408239842,
+            "baseline_ms": 87.27519999956712,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 1 vs atol 1",
+              "metrics": {
+                "max_abs_err": 1.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 34.50619999784976,
+              "mean_ms": 35.03959333368888,
+              "p05_ms": 30.85070000088308,
+              "p95_ms": 41.804899999988265,
+              "iqr_ms": 2.900499996030703,
+              "cv": 0.08168512583359464,
+              "trials": 15,
+              "samples_ms": [
+                30.8507,
+                32.3355,
+                32.4721,
+                33.1288,
+                33.4618,
+                33.6113,
+                33.8701,
+                34.5062,
+                34.9707,
+                35.0393,
+                35.0881,
+                36.0293,
+                39.1201,
+                39.305,
+                41.8049
+              ]
+            }
+          },
+          "critique": "**PASS, 2.53x \u2014 remaining headroom is memory traffic, not math.**\n\nYou make three full-size passes plus two full-size temporaries: a float32 buffer (4 B/px, written then re-read 3\u00d7 for `+=`, `clip`, `astype`), a uint16 index array (2 B/px), and the uint8 output. For a multi-megapixel image that's ~17 B/px of DRAM traffic for a 1 B/px result.\n\nTwo concrete fixes:\n\n1. Fold the `+0.5` into the table. Build the LUT from bin centres, `v = (i + 0.5) / 4096`, and index with `floor(v * 4096)` clamped to 4095. That deletes the `+=` pass entirely without changing the error bound (still \u22641 code).\n\n2.",
+          "usage": {
+            "prompt_tokens": 2400,
+            "completion_tokens": 2420,
+            "cost_usd": 0.0725
+          },
+          "wall_s": 115.44,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.84681420000561)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 240.065,
+          "parse_failed": true
+        }
+      ],
+      "baseline_ms": 87.27519999956712,
+      "best_round": 1,
+      "best_ms": 34.50619999784976,
+      "best_speedup": 2.529261408239842,
+      "best_kernel": "import numpy as np\n\n# 4096-entry LUT built once at import time.\n_v = np.linspace(0.0, 1.0, 4096, dtype=np.float64)\n_s = np.where(_v <= 0.0031308, 12.92 * _v, 1.055 * np.power(_v, 1.0 / 2.4) - 0.055)\n_LUT = np.clip(np.round(_s * 255.0), 0.0, 255.0).astype(np.uint8)\n\n\ndef kernel(linear: np.ndarray) -> np.ndarray:\n    a = np.asarray(linear, dtype=np.float32)\n    t = np.multiply(a, np.float32(4095.0), dtype=np.float32)\n    t += np.float32(0.5)\n    np.clip(t, 0.0, 4095.0, out=t)\n    idx = t.astype(np.uint16, copy=False)\n    return np.take(_LUT, idx)",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.086425
+    },
+    {
+      "task_id": "bilinear_resize",
+      "provider": "live",
+      "model": "claude-opus-5",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.83368070000142)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "bilinear_resize",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "Root cause: no kernel was emitted at all \u2014 the generation call timed out, so the parse stage received an empty string. Nothing about the algorithm was tested. The fix is to emit a complete, self-contained function immediately and keep it short enough to finish well inside the deadline; do not preamble or explore alternatives in the response.\n\nFor the next attempt, write the straightforward separable vectorised version and stop there:\n\n- Compute `sy` as a float64 1-D array of length `out_h` via `(np.arange(out_h) + 0.5) * (sh / out_h) - 0.5`, clip to `[0, sh-1]`; same for `sx`.\n- `y0 = np.floor(sy).astype(np.intp)`, `y1 = np.minimum(y0 + 1, sh - 1)`, `wy = (sy - y0)`; likewise x.\n- Gather once with `src[np.ix_(...)]` style row/column indexing into float32, then blend rows first (length `out_h` intermediate) and columns second so the four-tap product is never materialised as a full (out_h, out_w, 4, 4) array.\n- Finish with `np.rint`, clip, `astype(np.uint8)`.\n\nReshape `wy` to `(-1,1,1)` and `wx` to `(1,-1,1)` for broadcasting against the trailing RGBA axis.",
+          "usage": {
+            "prompt_tokens": 783,
+            "completion_tokens": 511,
+            "cost_usd": 0.01669
+          },
+          "wall_s": 248.605,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\n\ndef kernel(src: np.ndarray, out_h: int, out_w: int) -> np.ndarray:\n    sh, sw = src.shape[0], src.shape[1]\n\n    sy = (np.arange(out_h, dtype=np.float64) + 0.5) * (sh / out_h) - 0.5\n    np.clip(sy, 0.0, sh - 1, out=sy)\n    y0 = np.floor(sy).astype(np.intp)\n    y1 = np.minimum(y0 + 1, sh - 1)\n    wy = (sy - y0).astype(np.float32).reshape(-1, 1, 1)\n\n    sx = (np.arange(out_w, dtype=np.float64) + 0.5) * (sw / out_w) - 0.5\n    np.clip(sx, 0.0, sw - 1, out=sx)\n    x0 = np.floor(sx).astype(np.intp)\n    x1 = np.minimum(x0 + 1, sw - 1)\n    wx = (sx - x0).astype(np.float32).reshape(1, -1, 1)\n\n    # unique column gather to limit memory traffic\n    top = src[y0]          # (out_h, sw, 4) uint8\n    bot = src[y1]\n\n    t0 = top[:, x0].astype(np.float32)\n    t1 = top[:, x1].astype(np.float32)\n    b0 = bot[:, x0].astype(np.float32)\n    b1 = bot[:, x1].astype(np.float32)\n\n    # horizontal blend\n    t1 -= t0\n    t1 *= wx\n    t0 += t1\n    b1 -= b0\n    b1 *= wx\n    b0 += b1\n\n    # vertical blend\n    b0 -= t0\n    b0 *= wy\n    t0 += b0\n\n    t0 += 0.5\n    np.clip(t0, 0.0, 255.0, out=t0)\n    return t0.astype(np.uint8)",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 77.611299995624,
+            "stage": "done",
+            "task_id": "bilinear_resize",
+            "speedup": 1.9113428071331469,
+            "baseline_ms": 148.34179999888875,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 1 vs atol 1",
+              "metrics": {
+                "max_abs_err": 1.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 77.611299995624,
+              "mean_ms": 77.91435999679379,
+              "p05_ms": 73.05130000167992,
+              "p95_ms": 84.9541999923531,
+              "iqr_ms": 0.971800007391721,
+              "cv": 0.035343987803501564,
+              "trials": 10,
+              "samples_ms": [
+                73.0513,
+                76.9351,
+                77.1305,
+                77.3238,
+                77.549,
+                77.6736,
+                77.8248,
+                78.1023,
+                78.599,
+                84.9542
+              ]
+            }
+          },
+          "critique": "**Verdict: PASS, ~1.9x. Biggest remaining win is the pass structure, not the arithmetic.**\n\nYou currently do a fully 2-D gather: `src[y0]` and `src[y1]` each materialize `out_h \u00d7 sw \u00d7 4`, then four `out_h \u00d7 out_w \u00d7 4` float32 temporaries (`t0,t1,b0,b1`) are gathered and blended. That's 4 taps \u00d7 out_h \u00d7 out_w of gather + FLOP traffic and ~4 large float buffers live at once.\n\nMake it separable. First do the horizontal blend once over all `sh` source rows into a single `(sh, out_w, 4)` float32 buffer (two gathers `src[:, x0]`, `src[:, x1]`, one lerp). Then do the vertical blend by indexing that buffer with `y0`/`y1` and one lerp into the output. Tap count drops from `4\u00b7out_h\u00b7out_w` to `2\u00b7sh\u00b7out_w + 2\u00b7out_h\u00b7out_w`, and when upscaling each source row is filtered once instead of being re-gathered for every duplicated `y0`.\n\nKeep float32 accumulation \u2014 error is already exactly at atol 1, so do not switch to 8-bit fixed-point weights. Also fuse the `+0.5`/clip/cast by writing the rounded result straight into a preallocated uint8 output rather than `astype` allocating a fifth array.",
+          "usage": {
+            "prompt_tokens": 2846,
+            "completion_tokens": 1835,
+            "cost_usd": 0.060105
+          },
+          "wall_s": 27.238,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\n\ndef kernel(src: np.ndarray, out_h: int, out_w: int) -> np.ndarray:\n    src = np.asarray(src)\n    sh = src.shape[0]\n    sw = src.shape[1]\n    ch = src.shape[2] if src.ndim == 3 else 1\n\n    if out_h == sh and out_w == sw:\n        return src.copy()\n\n    # ---- horizontal mapping -------------------------------------------------\n    sx = (np.arange(out_w, dtype=np.float64) + 0.5) * (float(sw) / out_w) - 0.5\n    np.clip(sx, 0.0, sw - 1.0, out=sx)\n    x0 = np.floor(sx).astype(np.intp)\n    wx = (sx - x0).astype(np.float32)\n    x1 = x0 + 1\n    np.minimum(x1, sw - 1, out=x1)\n\n    # ---- vertical mapping ---------------------------------------------------\n    sy = (np.arange(out_h, dtype=np.float64) + 0.5) * (float(sh) / out_h) - 0.5\n    np.clip(sy, 0.0, sh - 1.0, out=sy)\n    y0 = np.floor(sy).astype(np.intp)\n    wy = (sy - y0).astype(np.float32)\n    y1 = y0 + 1\n    np.minimum(y1, sh - 1, out=y1)\n\n    # ---- restrict source rows when downscaling ------------------------------\n    if 2 * out_h < sh:\n        rows = np.unique(np.concatenate((y0, y1)))\n        sub = src[rows]\n        y0i = np.searchsorted(rows, y0)\n        y1i = np.searchsorted(rows, y1)\n    else:\n        sub = src\n        y0i = y0\n        y1i = y1\n\n    n = sub.shape[0]\n    flat = np.ascontiguousarray(sub).reshape(n, sw * ch)\n\n    off = np.arange(ch, dtype=np.intp)\n    i0 = (x0[:, None] * ch + off).ravel()\n    i1 = (x1[:, None] * ch + off).ravel()\n\n    # ---- pass 1: horizontal blend over the (few) needed source rows ---------\n    a = np.take(flat, i0, axis=1).astype(np.float32)\n    b = np.take(flat, i1, axis=1).astype(np.float32)\n    np.subtract(b, a, out=b)\n    b *= np.repeat(wx, ch)\n    a += b\n    del b, flat\n\n    # ---- pass 2: vertical blend into the output ----------------------------\n    t = np.take(a, y0i, axis=0)\n    u = np.take(a, y1i, axis=0)\n    del a\n    np.subtract(u, t, out=u)\n    u *= wy[:, None]\n    t += u\n    del u\n    t += 0.5\n\n    out = np.empty((out_h, out_w * ch), dtype=np.uint8)\n    out[:] = t\n    return out.reshape(out_h, out_w, ch)",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 37.91600000113249,
+            "stage": "done",
+            "task_id": "bilinear_resize",
+            "speedup": 3.912379997743908,
+            "baseline_ms": 148.34179999888875,
+            "oracle": {
+              "mode": "tolerance",
+              "detail": "max abs err 1 vs atol 1",
+              "metrics": {
+                "max_abs_err": 1.0,
+                "atol": 1.0,
+                "over_tol_frac": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 37.91600000113249,
+              "mean_ms": 38.01366000116104,
+              "p05_ms": 36.03980000480078,
+              "p95_ms": 40.26920000615064,
+              "iqr_ms": 2.177499991375953,
+              "cv": 0.033064866820564705,
+              "trials": 10,
+              "samples_ms": [
+                36.0398,
+                36.5753,
+                36.9815,
+                37.4533,
+                37.5709,
+                38.2611,
+                38.6141,
+                39.159,
+                39.2124,
+                40.2692
+              ]
+            }
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 1476,
+            "completion_tokens": 4956,
+            "cost_usd": 0.13128
+          },
+          "wall_s": 58.481,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 148.34179999888875,
+      "best_round": 2,
+      "best_ms": 37.91600000113249,
+      "best_speedup": 3.912379997743908,
+      "best_kernel": "import numpy as np\n\n\ndef kernel(src: np.ndarray, out_h: int, out_w: int) -> np.ndarray:\n    src = np.asarray(src)\n    sh = src.shape[0]\n    sw = src.shape[1]\n    ch = src.shape[2] if src.ndim == 3 else 1\n\n    if out_h == sh and out_w == sw:\n        return src.copy()\n\n    # ---- horizontal mapping -------------------------------------------------\n    sx = (np.arange(out_w, dtype=np.float64) + 0.5) * (float(sw) / out_w) - 0.5\n    np.clip(sx, 0.0, sw - 1.0, out=sx)\n    x0 = np.floor(sx).astype(np.intp)\n    wx = (sx - x0).astype(np.float32)\n    x1 = x0 + 1\n    np.minimum(x1, sw - 1, out=x1)\n\n    # ---- vertical mapping ---------------------------------------------------\n    sy = (np.arange(out_h, dtype=np.float64) + 0.5) * (float(sh) / out_h) - 0.5\n    np.clip(sy, 0.0, sh - 1.0, out=sy)\n    y0 = np.floor(sy).astype(np.intp)\n    wy = (sy - y0).astype(np.float32)\n    y1 = y0 + 1\n    np.minimum(y1, sh - 1, out=y1)\n\n    # ---- restrict source rows when downscaling ------------------------------\n    if 2 * out_h < sh:\n        rows = np.unique(np.concatenate((y0, y1)))\n        sub = src[rows]\n        y0i = np.searchsorted(rows, y0)\n        y1i = np.searchsorted(rows, y1)\n    else:\n        sub = src\n        y0i = y0\n        y1i = y1\n\n    n = sub.shape[0]\n    flat = np.ascontiguousarray(sub).reshape(n, sw * ch)\n\n    off = np.arange(ch, dtype=np.intp)\n    i0 = (x0[:, None] * ch + off).ravel()\n    i1 = (x1[:, None] * ch + off).ravel()\n\n    # ---- pass 1: horizontal blend over the (few) needed source rows ---------\n    a = np.take(flat, i0, axis=1).astype(np.float32)\n    b = np.take(flat, i1, axis=1).astype(np.float32)\n    np.subtract(b, a, out=b)\n    b *= np.repeat(wx, ch)\n    a += b\n    del b, flat\n\n    # ---- pass 2: vertical blend into the output ----------------------------\n    t = np.take(a, y0i, axis=0)\n    u = np.take(a, y1i, axis=0)\n    del a\n    np.subtract(u, t, out=u)\n    u *= wy[:, None]\n    t += u\n    del u\n    t += 0.5\n\n    out = np.empty((out_h, out_w * ch), dtype=np.uint8)\n    out[:] = t\n    return out.reshape(out_h, out_w, ch)",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.208075
+    },
+    {
+      "task_id": "glyph_atlas_blit",
+      "provider": "live",
+      "model": "claude-opus-5",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.817354600003455)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "glyph_atlas_blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "No kernel was emitted \u2014 the generation call timed out before any code was produced, so there is nothing to diagnose. The single root cause is budget, not logic: aim for a short, direct implementation and stop.\n\nFor the next attempt, keep the structure minimal and mechanical:\n\n- Copy `page` once to float32 (H, W, 3), blend in place, `np.rint`/clip to uint8 at the end.\n- Precompute `iy = np.floor(gy).astype(int)`, `fy = gy - iy` (same for x) vectorised outside the loop, plus `atlas` as float32 once.\n- Per glyph, do exact bilinear: pad the (gh, gw) coverage by one row/column of zeros, then `c = (1-fy)*(1-fx)*A[:-1,:-1] + ...` over the four shifted views. That resolves phase exactly and loses no coverage \u2014 no supersampling needed.\n- Write into the `(gh+1, gw+1)` destination slice with `a = c/255`, broadcasting `rgb[i]` over the last axis.\n\nOne Python loop over glyphs is acceptable; order dependence forbids batching.",
+          "usage": {
+            "prompt_tokens": 1070,
+            "completion_tokens": 446,
+            "cost_usd": 0.0165
+          },
+          "wall_s": 249.563,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    page = np.asarray(page)\n    H, W = page.shape[0], page.shape[1]\n\n    out = page.astype(np.float32)\n\n    atlas = np.asarray(atlas)\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    # coverage pre-scaled to alpha in [0,1]\n    A = atlas.astype(np.float32)\n    A *= np.float32(1.0 / 255.0)\n\n    gid = np.asarray(gid).astype(np.intp, copy=False)\n    gyf = np.asarray(gy, dtype=np.float64)\n    gxf = np.asarray(gx, dtype=np.float64)\n\n    iy = np.floor(gyf).astype(np.intp)\n    ix = np.floor(gxf).astype(np.intp)\n    fy = (gyf - iy).astype(np.float32)\n    fx = (gxf - ix).astype(np.float32)\n\n    rgbf = np.asarray(rgb, dtype=np.float32)\n    if rgbf.ndim == 1:\n        rgbf = rgbf.reshape(1, -1)\n\n    bh, bw = gh + 1, gw + 1\n    buf = np.empty((bh, bw), np.float32)\n    tmp = np.empty((bh, bw, 3), np.float32)\n\n    n = gid.shape[0]\n    for i in range(n):\n        g = A[gid[i]]\n        a = fy[i]\n        b = fx[i]\n        oa = np.float32(1.0) - a\n        ob = np.float32(1.0) - b\n\n        # exact bilinear resample into (gh+1, gw+1) padded buffer\n        np.multiply(g, oa * ob, out=buf[:gh, :gw])\n        buf[gh, :] = 0.0\n        buf[:, gw] = 0.0\n        if b != 0.0:\n            buf[:gh, 1:] += g * (oa * b)\n        if a != 0.0:\n            buf[1:, :gw] += g * (a * ob)\n            if b != 0.0:\n                buf[1:, 1:] += g * (a * b)\n\n        y = iy[i]\n        x = ix[i]\n        h = bh if y + bh <= H else H - y\n        w = bw if x + bw <= W else W - x\n        if h <= 0 or w <= 0:\n            continue\n\n        dest = out[y:y + h, x:x + w]\n        t = tmp[:h, :w]\n        np.subtract(rgbf[i], dest, out=t)\n        t *= buf[:h, :w, None]\n        dest += t\n\n    np.rint(out, out=out)\n    return out.astype(np.uint8)",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+            "timing": null,
+            "stage": "correctness",
+            "task_id": "glyph_atlas_blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {
+              "mode": "perceptual",
+              "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+              "metrics": {
+                "ssim": 0.7458271927767557,
+                "max_pixel_err": 0.9725490196078431,
+                "bad_frac": 0.11052576700846355
+              }
+            },
+            "timing_detail": {}
+          },
+          "critique": "[advisor call failed: provider gave up after 93s (deadline 240s): RuntimeError('empty response content (stop_reason=max_tokens)')]",
+          "usage": {
+            "prompt_tokens": 1683,
+            "completion_tokens": 3447,
+            "cost_usd": 0.09459
+          },
+          "wall_s": 132.612,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.anthropic.com', port=443): Read timed out. (read timeout=56.88572310000018)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "glyph_atlas_blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 240.06,
+          "parse_failed": true
+        }
+      ],
+      "baseline_ms": 43.831449998833705,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.11109000000000001
+    },
+    {
+      "task_id": "text_page_raster",
+      "provider": "live",
+      "model": "claude-opus-5",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 184s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "text_page_raster",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "[advisor call failed: provider gave up after 17s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')]",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 200.487,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 17s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "text_page_raster",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "[advisor call failed: provider gave up after 16s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')]",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 33.17,
+          "parse_failed": true
+        },
+        {
+          "index": 2,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider gave up after 17s (deadline 240s): HTTPError('400 Client Error: Bad Request for url: https://api.anthropic.com/v1/messages')",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "text_page_raster",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 16.554,
+          "parse_failed": true
+        }
+      ],
+      "baseline_ms": 188.74390000564745,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.0
+    }
+  ]
+}
