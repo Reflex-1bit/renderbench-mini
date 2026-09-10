@@ -1,0 +1,151 @@
+{
+  "task_id": "blit",
+  "provider": "live",
+  "model": "z-ai/glm-5.3-free",
+  "use_advisor": true,
+  "max_rounds": 3,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    # Fresh destination copy (never mutate inputs).\n    out = dst.copy()\n\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Clip the source rectangle against the destination bounds.\n    # Source rows/cols that would land outside [0,H) x [0,W) are dropped.\n    sy0 = -dy if dy < 0 else 0\n    sx0 = -dx if dx < 0 else 0\n    over_y = dy + sh - H\n    over_x = dx + sw - W\n    sy1 = sh - over_y if over_y > 0 else sh\n    sx1 = sw - over_x if over_x > 0 else sw\n\n    if sy1 > sy0 and sx1 > sx0:\n        # Single strided block assignment in C: no per-pixel Python work.\n        out[dy + sy0:dy + sy1, dx + sx0:dx + sx1] = src[sy0:sy1, sx0:sx1]\n\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.9813000069698319,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 11.54009978701827,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.9813000069698319,
+          "mean_ms": 1.033073333868136,
+          "p05_ms": 0.9111000035773031,
+          "p95_ms": 1.3868000023649074,
+          "iqr_ms": 0.12789999891538173,
+          "cv": 0.12852343781070935,
+          "trials": 15,
+          "samples_ms": [
+            0.9111,
+            0.9162,
+            0.9231,
+            0.9331,
+            0.9677,
+            0.9719,
+            0.9734,
+            0.9813,
+            1.016,
+            1.0189,
+            1.0261,
+            1.061,
+            1.1206,
+            1.2889,
+            1.3868
+          ]
+        }
+      },
+      "critique": "PASS, bit-identical, and the shape is right: clip bounds computed in scalars, then one strided block assignment \u2014 no per-pixel Python work, no dtype widening.\n\nLargest remaining headroom: the blit rectangle is written twice. `dst.copy()` memcpys the full H\u00d7W\u00d74 destination, then the block assignment overwrites the (sy1-sy0)\u00d7(sx1-sx0)\u00d74 overlap a second time. That double write is the only redundant work in the kernel; it is negligible when src is small relative to dst but grows with the source. Everything else is already memory-bandwidth-bound: the full-destination copy is mandated by the \"return a new array, never mutate\" contract, so it cannot be eliminated without breaking correctness.\n\nMinor: the `sy1 > sy0 and sx1 > sx0` guard is redundant \u2014 empty slices assign nothing \u2014 but it costs nothing and short-circuits early.",
+      "usage": {
+        "prompt_tokens": 1113,
+        "completion_tokens": 3426,
+        "cost_usd": 0.016633
+      },
+      "wall_s": 88.874,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "def kernel(dst, src, dy, dx):\n    H, W = dst.shape[:2]\n    sh, sw = src.shape[:2]\n    # clip\n    y0 = max(dy, 0); y1 = min(dy + sh, H)\n    x0 = max(dx, 0); x1 = min(dx + sw, W)\n    out = np.empty_like(dst)\n    if y0 >= y1 or x0 >= x1:\n        out[:] = dst  # full copy, no overlap\n        return out\n    sy0 = y0 - dy; sx0 = x0 - dx\n    sy1 = y1 - dy; sx1 = x1 - dx\n    # top band\n    if y0 > 0:\n        out[:y0] = dst[:y0]\n    if y1 < H:\n        out[y1:] = dst[y1:]\n    if x0 > 0:\n        out[y0:y1, :x0] = dst[y0:y1, :x0]\n    if x1 < W:\n        out[y0:y1, x1:] = dst[y0:y1, x1:]\n    out[y0:y1, x0:x1] = src[sy0:sy1, sx0:sx1]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 7, in kernel\nNameError: name 'np' is not defined\n",
+        "timing": null,
+        "stage": "run",
+        "task_id": "blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The kernel never imports NumPy. Line 7 calls `np.empty_like(dst)`, but the module contains no `import numpy as np` statement, and the judge's harness does not inject `np` into the candidate's namespace \u2014 it only calls `kernel(**inputs)`. The failure is a NameError at the very first statement, so none of the clipping logic has actually been exercised yet.\n\nFix: add `import numpy as np` at the top of the file, above the function definition. Nothing else in the kernel can be evaluated until this is resolved; the clip-rectangle arithmetic and band-copy structure look plausible but are unverified until the import exists and the run completes.",
+      "usage": {
+        "prompt_tokens": 1497,
+        "completion_tokens": 6215,
+        "cost_usd": 0.029442
+      },
+      "wall_s": 157.593,
+      "parse_failed": false
+    },
+    {
+      "index": 2,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    # Fresh copy of dst; inputs are never mutated.\n    out = dst.copy()\n\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Source rows/cols that land inside dst:\n    # src index i maps to dst index dy + i, valid when 0 <= dy + i < H.\n    sy0 = -dy if dy < 0 else 0\n    sx0 = -dx if dx < 0 else 0\n    sy1 = H - dy\n    if sy1 > sh:\n        sy1 = sh\n    sx1 = W - dx\n    if sx1 > sw:\n        sx1 = sw\n\n    # Fully clipped: plain copy is the answer.\n    if sy0 >= sy1 or sx0 >= sx1:\n        return out\n\n    # Single vectorized strided copy of the overlapping rectangle.\n    out[dy + sy0:dy + sy1, dx + sx0:dx + sx1] = src[sy0:sy1, sx0:sx1]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 1.2329000019235536,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 9.185092046204533,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 1.2329000019235536,
+          "mean_ms": 1.2958266660765123,
+          "p05_ms": 1.1283999992883764,
+          "p95_ms": 1.4749999972991645,
+          "iqr_ms": 0.24130000383593142,
+          "cv": 0.0962003743468655,
+          "trials": 15,
+          "samples_ms": [
+            1.1284,
+            1.1366,
+            1.1502,
+            1.1978,
+            1.2109,
+            1.2127,
+            1.2227,
+            1.2329,
+            1.3296,
+            1.3743,
+            1.4187,
+            1.4391,
+            1.4432,
+            1.4653,
+            1.475
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 610,
+        "completion_tokens": 1581,
+        "cost_usd": 0.00781
+      },
+      "wall_s": 33.569,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 0,
+  "best_ms": 0.9813000069698319,
+  "best_speedup": 11.54009978701827,
+  "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    # Fresh destination copy (never mutate inputs).\n    out = dst.copy()\n\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Clip the source rectangle against the destination bounds.\n    # Source rows/cols that would land outside [0,H) x [0,W) are dropped.\n    sy0 = -dy if dy < 0 else 0\n    sx0 = -dx if dx < 0 else 0\n    over_y = dy + sh - H\n    over_x = dx + sw - W\n    sy1 = sh - over_y if over_y > 0 else sh\n    sx1 = sw - over_x if over_x > 0 else sw\n\n    if sy1 > sy0 and sx1 > sx0:\n        # Single strided block assignment in C: no per-pixel Python work.\n        out[dy + sy0:dy + sy1, dx + sx0:dx + sx1] = src[sy0:sy1, sx0:sx1]\n\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.053884800000000004
+}

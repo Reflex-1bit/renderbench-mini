@@ -1,0 +1,130 @@
+{
+  "tag": "live-v2-test",
+  "timestamp_utc": "20260909T225653Z",
+  "provider": "live",
+  "model": "z-ai/glm-5.3-free",
+  "pinned_model_setting": "z-ai/glm-5.3-free",
+  "prompt_version": "rb-mini-0.4",
+  "seed": 20260909,
+  "max_rounds": 3,
+  "advisor": true,
+  "advisor_ablation_supported": true,
+  "offline_disclaimer": null,
+  "environment": {
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 96 Stepping 0, AuthenticAMD",
+    "numpy": "2.5.1",
+    "torch": null,
+    "cuda_device": null,
+    "triton": null
+  },
+  "calibration": {
+    "all_probes_separated": true,
+    "thresholds": {
+      "min_ssim": 0.998,
+      "max_pixel_err": 0.1,
+      "max_bad_frac": 0.001
+    },
+    "ssim_margin": -2.5591623127318996e-05,
+    "caught_only_by_caps": [
+      "drop-one-glyph"
+    ]
+  },
+  "wall_s": 11836.6,
+  "n_tasks": 1,
+  "n_solved": 0,
+  "geomean_speedup": 0.0,
+  "total_cost_usd": 0.0024,
+  "tasks": [
+    {
+      "task_id": "srgb_gamma",
+      "provider": "live",
+      "model": "z-ai/glm-5.3-free",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider failed after 4 attempts: ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.tokenrouter.com', port=443): Read timed out. (read timeout=180)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "The candidate body is empty: the submission never reached the judge. The failure is infrastructural, not algorithmic \u2014 the provider call to api.tokenrouter.com timed out (180 s read timeout, retried 4 times) during the parse stage, so no kernel text was ever parsed or executed. There is no code to critique and no correctness or performance diagnosis to make.\n\nAction for the next attempt: resubmit the intended implementation unchanged. Do not restructure the kernel in response to this verdict; nothing about the algorithm was evaluated. If the timeout recurs, the submission payload or endpoint latency is the problem to investigate, not the kernel.\n\nFor reference, a valid resubmission should match the signature `kernel(linear) -> uint8`, apply the piecewise 12.92 / 1.055\u00b7v^(1/2.4) \u2212 0.055 encode (or a 256/4096-entry LUT), and clip-round to [0, 255] \u2014 the oracle's atol of one code value accommodates either strategy.",
+          "usage": {
+            "prompt_tokens": 500,
+            "completion_tokens": 393,
+            "cost_usd": 0.002429
+          },
+          "wall_s": 763.647,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider failed after 4 attempts: ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.tokenrouter.com', port=443): Read timed out. (read timeout=180)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "[advisor call failed: provider failed after 4 attempts: ConnectionError(MaxRetryError('HTTPSConnectionPool(host=\\'api.tokenrouter.com\\', port=443): Max retries exceeded with url: /v1/chat/completions (Caused by NameResolutionError(\"HTTPSConnection(host=\\'api.tokenrouter.com\\', port=443): Failed to resolve \\'api.tokenrouter.com\\' ([Errno 11001] getaddrinfo failed)\"))'))]",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 10334.957,
+          "parse_failed": true
+        },
+        {
+          "index": 2,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider failed after 4 attempts: ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.tokenrouter.com', port=443): Read timed out. (read timeout=180)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0
+          },
+          "wall_s": 737.984,
+          "parse_failed": true
+        }
+      ],
+      "baseline_ms": 87.27519999956712,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.0024292000000000003
+    }
+  ]
+}

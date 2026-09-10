@@ -1,0 +1,137 @@
+{
+  "tag": "live-smoke3",
+  "timestamp_utc": "20260909T214605Z",
+  "provider": "live",
+  "model": "z-ai/glm-5.3-free",
+  "pinned_model_setting": "z-ai/glm-5.3-free",
+  "prompt_version": "rb-mini-0.3",
+  "seed": 20260909,
+  "max_rounds": 2,
+  "advisor": true,
+  "advisor_ablation_supported": true,
+  "offline_disclaimer": null,
+  "environment": {
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 96 Stepping 0, AuthenticAMD",
+    "numpy": "2.5.1",
+    "torch": null,
+    "cuda_device": null,
+    "triton": null
+  },
+  "calibration": {
+    "all_probes_separated": true,
+    "thresholds": {
+      "min_ssim": 0.998,
+      "max_pixel_err": 0.1,
+      "max_bad_frac": 0.001
+    },
+    "ssim_margin": -2.5591623127318996e-05,
+    "caught_only_by_caps": [
+      "drop-one-glyph"
+    ]
+  },
+  "wall_s": 218.3,
+  "n_tasks": 1,
+  "n_solved": 1,
+  "geomean_speedup": 10.844,
+  "total_cost_usd": 0.0531,
+  "tasks": [
+    {
+      "task_id": "blit",
+      "provider": "live",
+      "model": "z-ai/glm-5.3-free",
+      "use_advisor": true,
+      "max_rounds": 2,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Vertical clip of the source rectangle against destination bounds.\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    if y0 >= y1:\n        return dst.copy()\n\n    # Horizontal clip.\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n    if x0 >= x1:\n        return dst.copy()\n\n    sy0 = y0 - dy\n    sy1 = y1 - dy\n    sx0 = x0 - dx\n    sx1 = x1 - dx\n\n    # Fast path: the blit covers the entire destination -> result is just src.\n    if y0 == 0 and x0 == 0 and y1 == H and x1 == W:\n        return src[sy0:sy1, sx0:sx1].copy()\n\n    # General path: one contiguous memcpy of dst, then overwrite the\n    # (already clipped) intersection with the source pixels.\n    out = dst.copy()\n    out[y0:y1, x0:x1] = src[sy0:sy1, sx0:sx1]\n    return out",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 1.0443000064697117,
+            "stage": "done",
+            "task_id": "blit",
+            "speedup": 10.843914518123704,
+            "baseline_ms": 11.324300001433585,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 1.0443000064697117,
+              "mean_ms": 1.0761266680977617,
+              "p05_ms": 0.872900003741961,
+              "p95_ms": 1.3828000010107644,
+              "iqr_ms": 0.08730000263312832,
+              "cv": 0.10680362827764789,
+              "trials": 15,
+              "samples_ms": [
+                0.8729,
+                0.9804,
+                1.0097,
+                1.0232,
+                1.0314,
+                1.0351,
+                1.0409,
+                1.0443,
+                1.0462,
+                1.058,
+                1.0909,
+                1.1105,
+                1.1679,
+                1.2477,
+                1.3828
+              ]
+            }
+          },
+          "critique": "PASS, bit-identical, so the critique is pure performance. The remaining headroom is the double-write of the intersection: `dst.copy()` memcpys all H\u00d7W\u00d74 bytes, then the slice assignment immediately overwrites the (y1\u2212y0)\u00d7(x1\u2212x0) overlap \u2014 those bytes are read from dst and written to `out` for nothing. Replace the full copy with `out = np.empty_like(dst)`, then copy only the surviving dst regions: rows `[0:y0]`, rows `[y1:H]`, and within rows `[y0:y1]` the column strips `[0:x0]` and `[x1:W]`; write the clipped src slice",
+          "usage": {
+            "prompt_tokens": 1180,
+            "completion_tokens": 5490,
+            "cost_usd": 0.025808
+          },
+          "wall_s": 116.653,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "def kernel(dst, src, dy, dx):\n    H, W = dst.shape[0], dst.shape[1]\n    sh, sw = src.shape[0], src.shape[1]\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    if y1 > H: y1 = H\n    x1 = dx + sw\n    if x1 > W: x1 = W\n    if y0 >= y1 or x0 >= x1:\n        return dst.copy()\n    out = np.empty_like(dst)\n    if y0:\n        out[:y0] = dst[:y0]\n    if y1 < H:\n        out[y1:] = dst[y1:]\n    if x0:\n        out[y0:y1, :x0] = dst[y0:y1, :x0]\n    if x1 < W:\n        out[y0:y1, x1:] = dst[y0:y1, x1:]\n    out[y0:y1, x0:x1] = src[y0-dy:y1-dy, x0-dx:x1-dx]\n    return out",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 12, in kernel\nNameError: name 'np' is not defined\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 621,
+            "completion_tokens": 6000,
+            "cost_usd": 0.027269
+          },
+          "wall_s": 101.677,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 11.324300001433585,
+      "best_round": 0,
+      "best_ms": 1.0443000064697117,
+      "best_speedup": 10.843914518123704,
+      "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Vertical clip of the source rectangle against destination bounds.\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    if y0 >= y1:\n        return dst.copy()\n\n    # Horizontal clip.\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n    if x0 >= x1:\n        return dst.copy()\n\n    sy0 = y0 - dy\n    sy1 = y1 - dy\n    sx0 = x0 - dx\n    sx1 = x1 - dx\n\n    # Fast path: the blit covers the entire destination -> result is just src.\n    if y0 == 0 and x0 == 0 and y1 == H and x1 == W:\n        return src[sy0:sy1, sx0:sx1].copy()\n\n    # General path: one contiguous memcpy of dst, then overwrite the\n    # (already clipped) intersection with the source pixels.\n    out = dst.copy()\n    out[y0:y1, x0:x1] = src[sy0:sy1, sx0:sx1]\n    return out",
+      "solved": true,
+      "rounds_to_first_pass": 0,
+      "cost_usd": 0.05307740000000001
+    }
+  ]
+}

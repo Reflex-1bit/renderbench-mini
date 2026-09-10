@@ -1,0 +1,517 @@
+{
+  "tag": "live-full",
+  "timestamp_utc": "20260909T220151Z",
+  "provider": "live",
+  "model": "z-ai/glm-5.3-free",
+  "pinned_model_setting": "z-ai/glm-5.3-free",
+  "prompt_version": "rb-mini-0.3",
+  "seed": 20260909,
+  "max_rounds": 3,
+  "advisor": true,
+  "advisor_ablation_supported": true,
+  "offline_disclaimer": null,
+  "environment": {
+    "python": "3.14.6",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "AMD64 Family 26 Model 96 Stepping 0, AuthenticAMD",
+    "numpy": "2.5.1",
+    "torch": null,
+    "cuda_device": null,
+    "triton": null
+  },
+  "calibration": {
+    "all_probes_separated": true,
+    "thresholds": {
+      "min_ssim": 0.998,
+      "max_pixel_err": 0.1,
+      "max_bad_frac": 0.001
+    },
+    "ssim_margin": -2.5591623127318996e-05,
+    "caught_only_by_caps": [
+      "drop-one-glyph"
+    ]
+  },
+  "wall_s": 3189.7,
+  "n_tasks": 5,
+  "n_solved": 1,
+  "geomean_speedup": 2.025,
+  "total_cost_usd": 0.3868,
+  "tasks": [
+    {
+      "task_id": "alpha_composite",
+      "provider": "live",
+      "model": "z-ai/glm-5.3-free",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "def kernel(dst, src):\n    a = 255 - src[..., 3]  # uint8, 0..255\n    # product in uint16\n    # dst[..., c] * a\n    # We can do this via broadcasting: dst (H,W,4) * a (H,W,1) -> uint16? No, uint8*uint8 in numpy gives uint8 (with wraparound). Need to cast.",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "kernel returned NoneType, expected np.ndarray",
+            "timing": null,
+            "stage": "run",
+            "task_id": "alpha_composite",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "Root cause: the kernel is a stub. The body computes `a` and then stops \u2014 the multiplication, the floor division, the addition, and the return statement exist only as comments, so Python falls off the end and returns None. The judge's \"returned NoneType\" is the direct consequence; nothing was ever measured about the arithmetic.\n\nFor the next attempt, the mechanism the comments were circling is correct and simple: promote before multiplying. Cast both operands, e.g. `dst.astype(np.uint16)` and `a.astype(np.uint16)` kept as an (H, W, 1) slice (`src[..., 3:4]`), so the broadcast product lands in uint16 without wraparound. Then `src.astype(np.uint16) + prod // 255`, clip to 255, and cast back to uint8. The sum fits uint16 (max 510), so no int32 is needed. One vectorized expression, no Python loop, and it will pass the exact oracle.",
+          "usage": {
+            "prompt_tokens": 954,
+            "completion_tokens": 6613,
+            "cost_usd": 0.030433
+          },
+          "wall_s": 134.407,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray) -> np.ndarray:\n    d = dst.astype(np.uint16)\n    s = src.astype(np.uint16)\n    a = 255 - s[..., 3:4]  # (H, W, 1) uint16\n    prod = d * a  # uint16, max 65025\n    out = s + prod // 255\n    out = np.minimum(out, 255)\n    return out.astype(np.uint8)",
+          "coder_note": "",
+          "judge": {
+            "pass": true,
+            "error": "",
+            "timing": 32.557899998209905,
+            "stage": "done",
+            "task_id": "alpha_composite",
+            "speedup": 2.025259614336461,
+            "baseline_ms": 65.93819999397965,
+            "oracle": {
+              "mode": "exact",
+              "detail": "bit-identical",
+              "metrics": {
+                "mismatched": 0.0
+              }
+            },
+            "timing_detail": {
+              "median_ms": 32.557899998209905,
+              "mean_ms": 34.69673999934457,
+              "p05_ms": 29.573899999377318,
+              "p95_ms": 48.89790000015637,
+              "iqr_ms": 4.724200000055134,
+              "cv": 0.14485331894090736,
+              "trials": 15,
+              "samples_ms": [
+                29.5739,
+                30.7169,
+                30.7776,
+                30.8449,
+                32.3391,
+                32.4198,
+                32.5048,
+                32.5579,
+                33.9403,
+                34.3711,
+                34.4803,
+                35.5691,
+                38.4298,
+                43.0277,
+                48.8979
+              ]
+            }
+          },
+          "critique": "[advisor call failed: provider failed after 4 attempts: RuntimeError('empty `content` (finish_reason=length); reasoning_content had 4782 chars, no kernel found in it either -- raise max_tokens')]",
+          "usage": {
+            "prompt_tokens": 695,
+            "completion_tokens": 6000,
+            "cost_usd": 0.027373
+          },
+          "wall_s": 245.561,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "def kernel(dst, src):\n    a = src[..., 3:4].astype(np.uint16)  # (H, W, 1)\n    t = 255 - a  # uint16\n    d = dst.astype(np.uint16)  # (H, W, 4)\n    prod = d * t  # broadcasting, (H, W, 4), max 65025 fits uint16\n    q = prod // 255  # uint16 division\n    s = src.astype(np.uint16)\n    out = s + q  # max 510\n    np.minimum(out, 255, out=out)\n    return out.astype(np.uint8)",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 2, in kernel\nNameError: name 'np' is not defined\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "alpha_composite",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 532,
+            "completion_tokens": 6000,
+            "cost_usd": 0.027145
+          },
+          "wall_s": 100.473,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 65.93819999397965,
+      "best_round": 1,
+      "best_ms": 32.557899998209905,
+      "best_speedup": 2.025259614336461,
+      "best_kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray) -> np.ndarray:\n    d = dst.astype(np.uint16)\n    s = src.astype(np.uint16)\n    a = 255 - s[..., 3:4]  # (H, W, 1) uint16\n    prod = d * a  # uint16, max 65025\n    out = s + prod // 255\n    out = np.minimum(out, 255)\n    return out.astype(np.uint8)",
+      "solved": true,
+      "rounds_to_first_pass": 1,
+      "cost_usd": 0.08495060000000001
+    },
+    {
+      "task_id": "srgb_gamma",
+      "provider": "live",
+      "model": "z-ai/glm-5.3-free",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "import numpy as np\n\n_N = 65536\n_nodes = np.linspace(0.0, 1.0, _N, dtype=np.float64)  # or arange/_N-1\n_s = np.where(_nodes <= 0.0031308, 12.92*_nodes, 1.055*np.power(_nodes, 1.0/2.4) - 0.055)\n_LUT = np.clip(np.rint(_s*255.0), 0, 255).astype(np.uint8)\n\ndef kernel(linear):\n    t = linear.astype(np.float32)  # already float32; skip\n    ...",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "kernel returned NoneType, expected np.ndarray",
+            "timing": null,
+            "stage": "run",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "Root cause: the kernel body is a stub. The `...` placeholder makes the function fall through and return `None`, which is exactly what the judge reports. The module-level LUT is built correctly; the missing piece is the four lines that use it.\n\nWhat to add: map `linear` to LUT indices and gather. Compute `idx = np.clip(np.rint(linear * (_N - 1)), 0, _N - 1).astype(np.intp)` \u2014 the rint/clip pair is required because `linear` is float32 and values at exactly 1.0 must land on index 65535, not 65536 \u2014 then `return _LUT[idx]`. The fancy-index gather preserves the (H, W, 3) shape automatically, so no reshape is needed.\n\nAlso delete the dead `t = linear.astype(np.float32)` line; the input is already float32 and the cast allocates a full copy for nothing.",
+          "usage": {
+            "prompt_tokens": 1092,
+            "completion_tokens": 6467,
+            "cost_usd": 0.029984
+          },
+          "wall_s": 140.577,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "def kernel(linear):\n    idx = (linear * 65535.0).astype(np.intp)  # truncation\n    np.clip(idx, 0, 65535, out=idx)  # safety, in-place on our temp\n    return _LUT[idx]",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 2, in kernel\nNameError: name 'np' is not defined\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "Root cause: the candidate runs in a fresh namespace where neither `np` nor `_LUT` exists. The judge executes only your submitted source; it does not inherit your interactive session's globals. Line 2 hits `np.intp` first and raises NameError, and even with numpy imported, line 3 would immediately raise NameError for `_LUT`, which is referenced but never constructed anywhere in the submission.\n\nFix: make the file self-contained. Put `import numpy as np` at the top of the candidate source, and build the 65536-entry uint8 LUT at module load time \u2014 iterate i over 0..65535, set v = i/65535, apply the piecewise sRGB formula, clip, round, cast to uint8 \u2014 so `_LUT` exists before the first call. Building it lazily inside `kernel` would re-run 65536 pow calls per invocation and destroy the point of the LUT.\n\nThe indexing math itself (scale by 65535, truncate, clip, gather) is sound and within the one-code tolerance; only the undefined names caused the failure.",
+          "usage": {
+            "prompt_tokens": 1410,
+            "completion_tokens": 6932,
+            "cost_usd": 0.032475
+          },
+          "wall_s": 270.969,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "def kernel(linear):\n    idx = (linear * 65535.0).astype(np.int32)\n    np.clip(idx, 0, 65535, out=idx)  # in-place on our temp, fine\n    return _LUT[idx]",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 2, in kernel\nNameError: name 'np' is not defined\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "srgb_gamma",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 767,
+            "completion_tokens": 6000,
+            "cost_usd": 0.027474
+          },
+          "wall_s": 192.18,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 87.27519999956712,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.0899322
+    },
+    {
+      "task_id": "bilinear_resize",
+      "provider": "live",
+      "model": "z-ai/glm-5.3-free",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider failed after 4 attempts: ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='api.tokenrouter.com', port=443): Read timed out. (read timeout=180)\"))",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "bilinear_resize",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "The candidate is an empty string \u2014 the submission body never reached the judge. The recorded failure is a provider transport timeout (four ReadTimeouts against the API endpoint, 180 s read limit), not a defect in any kernel code: there is no `def kernel` to parse, so the parse stage aborted before correctness or performance were ever measured.\n\nNext attempt: resubmit the actual kernel source. Nothing about the task itself (`bilinear_resize`, half-pixel centres, RGBA uint8, tolerance 1.0) can be critiqued or improved from this run \u2014 no code was evaluated, so there are no correctness bugs to diagnose and no performance headroom to identify. If the timeout recurs, it is an infrastructure/payload-size problem on the submission path, not a signal about the algorithm; retry with the same kernel rather than modifying it.",
+          "usage": {
+            "prompt_tokens": 506,
+            "completion_tokens": 288,
+            "cost_usd": 0.001976
+          },
+          "wall_s": 567.366,
+          "parse_failed": true
+        },
+        {
+          "index": 1,
+          "kernel": "def kernel(src, out_h, out_w):\n    sh, sw = src.shape[:2]\n    # precompute per-axis coords (cheap, out_h + out_w sized)\n    ...",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "kernel returned NoneType, expected np.ndarray",
+            "timing": null,
+            "stage": "run",
+            "task_id": "bilinear_resize",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "The kernel is an incomplete stub: the body computes `sh, sw`, then a comment, and nothing else. There is no output allocation, no resampling loop, and no `return` statement, so Python implicitly returns `None` \u2014 hence \"returned NoneType, expected np.ndarray.\" This is not a numerical or edge-case failure; the judge never got far enough to compare pixels.\n\nNext attempt: finish the implementation. Allocate `np.empty((out_h, out_w, 4), dtype=np.uint8)`, compute the clamped source coordinates per the half-pixel formula, gather the four taps, weight, round, clip, and return the array. The precompute-per-axis structure already sketched (index arrays of length `out_h` and `out_w` rather than per-pixel recomputation of `sy`/`sx`) is the right shape \u2014 keep it, but the function must end by returning the filled output buffer.",
+          "usage": {
+            "prompt_tokens": 1220,
+            "completion_tokens": 6359,
+            "cost_usd": 0.029688
+          },
+          "wall_s": 121.953,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "def kernel(src, out_h, out_w):\n    sh, sw = src.shape[:2]\n    # vertical coords\n    r = np.arange(out_h, dtype=np.float64)\n    sy = (r + 0.5) * (sh / out_h) - 0.5\n    np.clip(sy, 0, sh - 1, out=sy)\n    y0 = np.floor(sy).astype(np.intp)  # or int32\n    y1 = np.minimum(y0 + 1, sh - 1)\n    wy = sy - y0  # in [0,1)\n    # horizontal\n    ...",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 4, in kernel\nNameError: name 'np' is not defined\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "bilinear_resize",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 731,
+            "completion_tokens": 6000,
+            "cost_usd": 0.027423
+          },
+          "wall_s": 85.568,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 148.34179999888875,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.0590866
+    },
+    {
+      "task_id": "glyph_atlas_blit",
+      "provider": "live",
+      "model": "z-ai/glm-5.3-free",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "def kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.astype(np.float64).copy()\n    for i in range(len(gid)):\n        g = atlas[gid[i]]\n        y0 = int(gy[i]); x0 = int(gx[i])\n        fy = gy[i] - y0; fx = gx[i] - x0\n        # bilinear resample\n        # shift coverage by (fy, fx)\n        ...\n        a = cov / 255.0\n        tile = out[y0:y0+gh, x0:x0+gw]\n        out[y0:y0+gh, x0:x0+gw] = tile * (1-a[...,None]) + rgb[i]*a[...,None]\n    return np.round(out).astype(np.uint8)",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 2, in kernel\nNameError: name 'np' is not defined\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "glyph_atlas_blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "The kernel is an unfinished skeleton, not an implementation. Root cause of the traceback: `np` is used on line 2 but numpy is never imported \u2014 add `import numpy as np` at module scope (the harness calls the function, it does not inject globals).\n\nFixing the import alone will not make it run. Three more defects are guaranteed to raise next:\n\n1. The bilinear resample section is a literal `...` placeholder \u2014 no coverage is ever computed.\n2. `gh` and `gw` are never defined; derive them per glyph as `g.shape`.\n3. `cov` is never assigned, so the `a = cov / 255.0` line will raise NameError.\n\nFor the resample itself, build the shifted coverage from the four neighbouring integer offsets: `cov = (1-fy)*(1-fx)*g + fy*(1-fx)*g_shift_down + ...`, padding `g` with zeros on bottom/right so out-of-box coverage is zero. Then the existing blend loop is structurally correct.",
+          "usage": {
+            "prompt_tokens": 1598,
+            "completion_tokens": 6588,
+            "cost_usd": 0.031224
+          },
+          "wall_s": 151.6,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": null,
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "provider call failed: provider failed after 4 attempts: RuntimeError('empty `content` (finish_reason=length); reasoning_content had 18968 chars, no kernel found in it either -- raise max_tokens')",
+            "timing": null,
+            "stage": "parse",
+            "task_id": "glyph_atlas_blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "The submission contains no kernel at all: the provider burned its entire token budget on reasoning (18,968 chars of reasoning_content, finish_reason=length) and never emitted code, so the judge had nothing to parse. This is a generation-budget failure, not an algorithmic defect \u2014 no correctness or performance diagnosis is possible.\n\nFor the next attempt: keep planning to a few sentences and emit the function immediately. The kernel must define `kernel(page, atlas, gid, gy, gx, rgb)`, copy `page`, and per glyph take `atlas[gid[i]]`, split `gy[i]`/`gx[i]` into an integer corner plus fractional remainder, resample coverage at 1/8-px phase or finer (bilinear or supersampling both pass), then blend `page = page*(1-a) + rgb[i]*a` in float, strictly in array order, rounding once at the end. Keep the Python loop to per-glyph work only \u2014 slice the destination box once and do the resample/blend with NumPy broadcasting inside it.",
+          "usage": {
+            "prompt_tokens": 661,
+            "completion_tokens": 783,
+            "cost_usd": 0.004371
+          },
+          "wall_s": 484.888,
+          "parse_failed": true
+        },
+        {
+          "index": 2,
+          "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    out = page.copy()\n    H, W = page.shape[:2]\n    n = len(gid)\n    for i in range(n):\n        A = atlas[gid[i]]\n        gh, gw = A.shape\n        fy = gy[i] - np.floor(gy[i])  # or use math\n        fx = gx[i] - np.floor(gx[i])\n        y0 = int(np.floor(gy[i])); x0 = int(np.floor(gx[i]))\n        # padded\n        Ap = np.zeros((gh+2, gw+2), np.float32)\n        Ap[1:-1, 1:-1] = A  # uint8 -> float32 cast\n        # horizontal\n        B = (1.0-fx)*Ap[:, :-1] + fx*Ap[:, 1:]\n        C = fy*B[:-1] + (1.0-fy)*B[1:]\n        a = C * (np.float32(1.0/255.0))\n        region = out[y0:y0+gh+1, x0:x0+gw+1].astype(np.float32)\n        col = np.asarray(rgb[i], np.float32)\n        region += (col - region) * a[..., None]\n        out[y0:y0+gh+1, x0:x0+gw+1] = np.rint(region)  # careful: rounding multiple times?",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "kernel returned NoneType, expected np.ndarray",
+            "timing": null,
+            "stage": "run",
+            "task_id": "glyph_atlas_blit",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 916,
+            "completion_tokens": 6000,
+            "cost_usd": 0.027682
+          },
+          "wall_s": 117.905,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 43.831449998833705,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.06327740000000001
+    },
+    {
+      "task_id": "text_page_raster",
+      "provider": "live",
+      "model": "z-ai/glm-5.3-free",
+      "use_advisor": true,
+      "max_rounds": 3,
+      "rounds": [
+        {
+          "index": 0,
+          "kernel": "def kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 43, in main\n    exec(compile(code, \"<candidate>\", \"exec\"), ns)\n         ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<candidate>\", line 1\n    def kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray\n                                                           ^\nSyntaxError: expected ':'\n",
+            "timing": null,
+            "stage": "compile",
+            "task_id": "text_page_raster",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "The submission is not a kernel \u2014 it is a bare signature. The candidate file contains only the `def kernel(...)` header with no colon and no body, so Python raises a SyntaxError at line 1 before any measurement runs. This is a truncation/emission bug in whatever produced the candidate, not a rendering defect: the judge never reached the correctness or timing stages, so nothing can be said about phase resolution, coverage, or performance.\n\nFix: emit the complete function \u2014 header terminated with a colon, followed by the actual implementation that walks `gid`/`gy`/`gx`, samples the atlas, and composites at fractional horizontal offsets. Verify the submitted text compiles on its own (e.g., `compile(src, \"<candidate>\", \"exec\")`) before handing it to the judge. Once a real body exists, the next review can address sub-pixel phase handling and per-glyph work.",
+          "usage": {
+            "prompt_tokens": 1334,
+            "completion_tokens": 6284,
+            "cost_usd": 0.029517
+          },
+          "wall_s": 149.573,
+          "parse_failed": false
+        },
+        {
+          "index": 1,
+          "kernel": "def kernel(page, atlas, gid, gy, gx, rgb):\n    H, W = page  # or page.shape\n    out = np.full((H, W, 3), 255, np.uint8)  # white\n    for i in range(len(gid)):\n        g = atlas[gid[i]]  # coverage mask, maybe (gh, gw) float in [0,1]\n        y0 = int(gy[i]); x0 = int(gx[i])\n        fx = gx[i] - x0  # fractional\n        # bilinear shift horizontally: mask[:, :] blended with mask shifted by 1\n        # composite: out[y0:y0+gh, x0:x0+gw] = ...\n    return out",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 2, in kernel\nValueError: too many values to unpack (expected 2)\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "text_page_raster",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "Root cause: `page` is not a 2-tuple. The contract (inherited from `glyph_atlas_blit`) passes the full output shape, `(H, W, 3)`, so `H, W = page` raises \"too many values to unpack (expected 2)\" before any rendering occurs. Fix the unpack to `H, W = page[:2]` (slice form also survives if `page` arrives as an ndarray whose `.shape` has three axes).\n\nSecond, non-speculative fact visible in the source: the loop body is comments, not code. Even with the unpack fixed, the kernel returns an all-white page \u2014 the bilinear horizontal blend (`g * (1-fx)` blended with `g` shifted one pixel right, split across `x0` and `x0+1` columns) and the black-on-white composite are never executed, which fails the coverage-loss threshold. Implement the fractional-x blend and the write into `out[y0:y0+gh, x0:x0+gw+1]` before resubmitting.",
+          "usage": {
+            "prompt_tokens": 1675,
+            "completion_tokens": 6839,
+            "cost_usd": 0.032437
+          },
+          "wall_s": 278.954,
+          "parse_failed": false
+        },
+        {
+          "index": 2,
+          "kernel": "def kernel(page, atlas, gid, gy, gx, rgb):\n    H, W = page[:2]\n    out = np.full((H, W, 3), 255, np.uint8)\n    for i in range(len(gid)):\n        g = atlas[gid[i]]\n        y0 = int(gy[i]); x0 = int(gx[i]); fx = gx[i] - x0\n        # blend\n        ...",
+          "coder_note": "",
+          "judge": {
+            "pass": false,
+            "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\AppData\\Local\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming\\Claude\\scratch-workspaces\\5c26dae9-d472-47de-9804-14e0fb3901ea\\cfeb014e-38f6-48c4-b760-f23fc21e514e\\scratch-2026-09-09-9ed803\\renderbench\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 3, in kernel\nNameError: name 'np' is not defined\n",
+            "timing": null,
+            "stage": "run",
+            "task_id": "text_page_raster",
+            "speedup": null,
+            "baseline_ms": null,
+            "oracle": {},
+            "timing_detail": {}
+          },
+          "critique": "",
+          "usage": {
+            "prompt_tokens": 848,
+            "completion_tokens": 6000,
+            "cost_usd": 0.027587
+          },
+          "wall_s": 147.7,
+          "parse_failed": false
+        }
+      ],
+      "baseline_ms": 188.74390000564745,
+      "best_round": null,
+      "best_ms": null,
+      "best_speedup": null,
+      "best_kernel": null,
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "cost_usd": 0.089541
+    }
+  ]
+}
