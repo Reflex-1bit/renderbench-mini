@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+assets/truth_*.npz
+assets/baseline_*.json
+gpu_install.log
+.env

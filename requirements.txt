@@ -1,0 +1,9 @@
+numpy>=2.0
+pillow>=10.0
+requests>=2.31          # live provider only; no openai SDK needed
+
+# GPU track (optional). Install from the CUDA index, e.g.
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+#   pip install triton-windows        # on Windows; `triton` ships with torch on Linux
+# torch>=2.11
+# triton>=3.8
