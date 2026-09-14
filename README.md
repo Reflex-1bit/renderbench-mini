@@ -200,3 +200,7 @@ judge(kernel_code, task_id) -> {"pass": bool, "error": str, "timing": float}
 4. Slug comparison on `glyph_atlas_blit` for the expert ceiling.
 5. CUDA events instead of wall-clock for the GPU track.
 6. Restore the two descoped tasks.
+
+---
+
+See also: [renderbench-paper](https://github.com/Reflex-1bit/renderbench-paper) — condensed research writeup and headline results.
