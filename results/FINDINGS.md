@@ -78,12 +78,25 @@ Only after all three were fixed did the glyph failures become `correctness` /
 
 # Triton track (2026-09-14, same day, later)
 
-## Everything above this line was numpy
+## Everything above this line is the CPU track
 
 Every result in this document up to here — the cliff, the taxonomy, the
-cross-model table — was produced by models writing **numpy**, because
-`CODER_SYSTEM` says "You may use numpy" and never once mentions Triton, GPU, or
-CUDA. No model in this project had ever been asked for a GPU kernel.
+cross-model table — was produced by models writing **numpy**, because that is
+what the CPU track asks for. That track is deliberate scaffolding: it runs with
+no GPU and no API key, which is what makes the oracles, the judge, the
+calibration probes and the agent loop testable and reproducible anywhere before
+any GPU or model spend is committed. `CODER_SYSTEM` asks for numpy on purpose.
+
+Triton was always the stated target (the project plan pins it as the target
+language), and the GPU track has had hand-written Triton kernels since the
+beginning. What had not happened yet was pointing the *agent loop* at that
+track. The work below is that step: a smoke test to confirm models can write
+working Triton at all, then a Triton-specific prompt and a GPU judge.
+
+The caveat that matters for reading the numbers above: they are CPU speedups
+over a CPU baseline. They are correctly measured and they say real things about
+model behaviour, but they are not GPU kernel results and should never be quoted
+as such.
 
 ## Asking for Triton instead, same models, same tasks
 

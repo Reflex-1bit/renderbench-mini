@@ -64,10 +64,14 @@ limit. Concurrency architecture itself is done and pushed.
 
 ## 2026-09-14 (evening) — the Triton gap, found and closed
 
-**Did:** Discovered that no model in this entire project had ever been asked to
-write Triton. `CODER_SYSTEM` says "You may use numpy" and never mentions Triton,
-GPU or CUDA — so every result to date (offline demo, GLM live runs, the Opus 5
-run, the 4-model cross-model study) was a model writing host-side NumPy. Built
+**Did:** Extended the agent loop from the CPU track to the Triton track. Up to
+this point every run (offline demo, GLM live runs, the Opus 5 run, the 4-model
+cross-model study) exercised the CPU track, which asks for NumPy by design —
+that track is the scaffolding that runs with no GPU and no API key, used to get
+the oracles, judge, calibration and loop working and reproducible first. Triton
+was always the stated target language and the GPU track has had hand-written
+Triton since the start; what had not been done was pointing the loop at it.
+Ran a smoke test to confirm models can produce working Triton at all, then built
 `triton_judge.py` (compiles a candidate, runs it on the RTX 5060, scores it with
 the SAME frozen oracles as the CPU track, times it) and `triton_bench.py`
 (generate → GPU judge → one round of verbatim compiler-error feedback,
