@@ -73,3 +73,61 @@ would have been wrong to report:
 
 Only after all three were fixed did the glyph failures become `correctness` /
 `compile` / `run` — genuine model output — rather than transport errors.
+
+---
+
+# Triton track (2026-09-14, same day, later)
+
+## Everything above this line was numpy
+
+Every result in this document up to here — the cliff, the taxonomy, the
+cross-model table — was produced by models writing **numpy**, because
+`CODER_SYSTEM` says "You may use numpy" and never once mentions Triton, GPU, or
+CUDA. No model in this project had ever been asked for a GPU kernel.
+
+## Asking for Triton instead, same models, same tasks
+
+`triton_judge.py` compiles the candidate, runs it on the RTX 5060, and scores it
+with the **same frozen oracles** as the CPU track. 4/6 solved.
+
+| Task | naive | agent numpy | agent Triton (kernel-only) | Triton vs numpy |
+|---|---|---|---|---|
+| `blit` | 11.32 ms | 0.72 ms (15.7x) | **0.050 ms — 225x** | 14x |
+| `alpha_composite` | 65.94 ms | 29.98 ms (2.2x) | **0.036 ms — 1852x** | 842x |
+| `srgb_gamma` | 87.28 ms | 18.71 ms (4.7x) | **0.047 ms — 1861x** | 399x |
+
+**End-to-end** (host→device→host, the honest number) for `alpha_composite`:
+**0.969 ms = 69.7x** vs naive, **30.9x** vs the best numpy kernel. Transfer is
+0.91 ms of that 0.969 ms — the compute is essentially free at this size, so
+kernel-only figures above should never be quoted alone.
+
+## The finding the numpy track was blind to
+
+| Model | numpy | Triton |
+|---|---|---|
+| `deepseek-v4-flash` | solved `blit` r0 | **3/3** |
+| `muse-glimmer-30b` | solved `blit` r0 | **1/3** |
+
+On numpy these two are indistinguishable — both solve `blit` on the first
+attempt, within 1 ms of each other. Point them at Triton and they separate
+hard. Model choice barely matters for host-side vectorisation and matters
+enormously for GPU kernel generation; a CPU-only benchmark cannot see this axis
+at all.
+
+`muse-glimmer` failures were genuine: `blit` never produced a usable code block
+(parse), `srgb_gamma` failed at `run` twice with real Triton compiler errors fed
+back as feedback.
+
+## Compile-error feedback works
+
+`deepseek-flash` on `alpha_composite`, hand-run earlier: round 0 produced
+structurally correct Triton (`@triton.jit`, correct grid/launch, masked
+load/store, right algorithm) with one real broadcasting bug — `offsets` not
+reshaped to `[:, None]` before combining with a `[1,4]` channel index, while
+correctly doing exactly that for `mask` one line below. Given the verbatim
+`CompilationError`, it fixed the precise line in 30 s / 695 tokens and
+recompiled to a **bit-exact** result.
+
+`srgb_gamma` (deepseek) and `alpha_composite` (muse-glimmer) both also solved on
+round 1 after a failed round 0 — so 3 of the 4 solves needed exactly one round
+of real compiler feedback.
