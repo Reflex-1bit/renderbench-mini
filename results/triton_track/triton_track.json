@@ -1,0 +1,157 @@
+{
+  "models": [
+    "deepseek-flash",
+    "muse-glimmer"
+  ],
+  "tasks": [
+    "blit",
+    "alpha_composite",
+    "srgb_gamma"
+  ],
+  "wall_s": 420.7,
+  "n_solved": 4,
+  "n_jobs": 6,
+  "results": [
+    {
+      "model": "deepseek-flash",
+      "task": "blit",
+      "solved": true,
+      "wall_s": 74.0,
+      "solved_round": 0,
+      "ms": 0.0503,
+      "rounds": [
+        {
+          "ok": true,
+          "stage": "done",
+          "error": "",
+          "ms": 0.0503,
+          "oracle": "exact",
+          "detail": "bit-identical",
+          "round": 0,
+          "tokens": 506,
+          "has_jit": true
+        }
+      ]
+    },
+    {
+      "model": "deepseek-flash",
+      "task": "alpha_composite",
+      "solved": true,
+      "wall_s": 165.6,
+      "solved_round": 0,
+      "ms": 0.0356,
+      "rounds": [
+        {
+          "ok": true,
+          "stage": "done",
+          "error": "",
+          "ms": 0.0356,
+          "oracle": "exact",
+          "detail": "bit-identical",
+          "round": 0,
+          "tokens": 616,
+          "has_jit": true
+        }
+      ]
+    },
+    {
+      "model": "muse-glimmer",
+      "task": "blit",
+      "solved": false,
+      "wall_s": 194.9,
+      "solved_round": null,
+      "ms": null,
+      "rounds": [
+        {
+          "round": 0,
+          "stage": "parse",
+          "error": "no kernel block"
+        }
+      ]
+    },
+    {
+      "model": "deepseek-flash",
+      "task": "srgb_gamma",
+      "solved": true,
+      "wall_s": 200.3,
+      "solved_round": 1,
+      "ms": 0.0469,
+      "rounds": [
+        {
+          "ok": false,
+          "stage": "run",
+          "error": "device, constexprs, options, attrs, warmup)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\runtime\\jit.py\", line 902, in _do_compile\n    kernel = self.compile(src, target=target, options=options.__dict__)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\compiler\\compiler.py\", line 307, in compile\n    module = src.make_ir(target, options, codegen_fns, module_map, context)\ntriton.compiler.errors.CompilationError: at 22:26:\n    # Load linear values\n    v = tl.load(linear_ptr + offsets, mask=mask)\n\n    # Apply sRGB gamma encoding\n    # s = 12.92 * v if v <= 0.0031308\n    # s = 1.055 * v**(1/2.4) - 0.055 otherwise\n    threshold = 0.0031308\n    is_low = v <= threshold\n\n    # Compute both branches\n    low_result = 12.92 * v\n    high_result = 1.055 * tl.math.pow(v, 1.0 / 2.4) - 0.055\n                          ^\nAttributeError(\"module 'triton.language.math' has no attribute 'pow'\")\n",
+          "round": 0,
+          "tokens": 573,
+          "has_jit": true
+        },
+        {
+          "ok": true,
+          "stage": "done",
+          "error": "",
+          "ms": 0.0469,
+          "oracle": "tolerance",
+          "detail": "max abs err 1 vs atol 1",
+          "round": 1,
+          "tokens": 576,
+          "has_jit": true
+        }
+      ]
+    },
+    {
+      "model": "muse-glimmer",
+      "task": "alpha_composite",
+      "solved": true,
+      "wall_s": 356.8,
+      "solved_round": 1,
+      "ms": 0.047,
+      "rounds": [
+        {
+          "ok": false,
+          "stage": "run",
+          "error": "^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\runtime\\jit.py\", line 757, in run\n    kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\runtime\\jit.py\", line 902, in _do_compile\n    kernel = self.compile(src, target=target, options=options.__dict__)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\compiler\\compiler.py\", line 307, in compile\n    module = src.make_ir(target, options, codegen_fns, module_map, context)\ntriton.compiler.errors.CompilationError: at 25:12:\n        other=0\n    )\n    src_vals = tl.load(\n        src_ptr + pixel_offsets[:, None] + c[None, :],\n        mask=mask[:, None],\n        other=0\n    )\n\n    dst_i = dst_vals.to(tl.int32)\n    src_i = src_vals.to(tl.int32)\n\n    alpha = src_i[:, 3]\n            ^\nunsupported tensor index: constexpr[3]\n",
+          "round": 0,
+          "tokens": 3919,
+          "has_jit": true
+        },
+        {
+          "ok": true,
+          "stage": "done",
+          "error": "",
+          "ms": 0.047,
+          "oracle": "exact",
+          "detail": "bit-identical",
+          "round": 1,
+          "tokens": 2527,
+          "has_jit": true
+        }
+      ]
+    },
+    {
+      "model": "muse-glimmer",
+      "task": "srgb_gamma",
+      "solved": false,
+      "wall_s": 420.7,
+      "solved_round": null,
+      "ms": null,
+      "rounds": [
+        {
+          "ok": false,
+          "stage": "run",
+          "error": ", device, constexprs, options, attrs, warmup)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\runtime\\jit.py\", line 902, in _do_compile\n    kernel = self.compile(src, target=target, options=options.__dict__)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\compiler\\compiler.py\", line 307, in compile\n    module = src.make_ir(target, options, codegen_fns, module_map, context)\ntriton.compiler.errors.CompilationError: at 11:21:\ndef _srgb_gamma_kernel(in_ptr, out_ptr, n_elements, BLOCK_SIZE: tl.constexpr):\n    pid = tl.program_id(0)\n    offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = offs < n_elements\n\n    v = tl.load(in_ptr + offs, mask=mask)\n    threshold = 0.0031308\n\n    is_low = v <= threshold\n    s_low = 12.92 * v\n    s_high = 1.055 * tl.math.pow(v, 1.0 / 2.4) - 0.055\n                     ^\nAttributeError(\"module 'triton.language.math' has no attribute 'pow'\")\n",
+          "round": 0,
+          "tokens": 2268,
+          "has_jit": true
+        },
+        {
+          "ok": false,
+          "stage": "run",
+          "error": "ttrs, warmup)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\runtime\\jit.py\", line 902, in _do_compile\n    kernel = self.compile(src, target=target, options=options.__dict__)\n  File \"C:\\Users\\adity\\rbvenv\\Lib\\site-packages\\triton\\compiler\\compiler.py\", line 307, in compile\n    module = src.make_ir(target, options, codegen_fns, module_map, context)\ntriton.compiler.errors.CompilationError: at 12:21:\ndef _srgb_gamma_kernel(in_ptr, out_ptr, n_elements, BLOCK_SIZE: tl.constexpr):\n    pid = tl.program_id(0)\n    offs = pid * BLOCK_SIZE + tl.arange(0, BLOCK_SIZE)\n    mask = offs < n_elements\n\n    v = tl.load(in_ptr + offs, mask=mask)\n    threshold = 0.0031308\n\n    is_low = v <= threshold\n    s_low = 12.92 * v\n    # 1/2.4 = 0.4166666666666667\n    s_high = 1.055 * tl.pow(v, 0.4166666666666667) - 0.055\n                     ^\nAttributeError(\"module 'triton.language' has no attribute 'pow'\")\n",
+          "round": 1,
+          "tokens": 2123,
+          "has_jit": true
+        }
+      ]
+    }
+  ]
+}
