@@ -16,9 +16,56 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+
+
+class RateLimiter:
+    """Token bucket shared by every provider that shares one API key.
+
+    A per-key rate limit (NVIDIA NIM's free tier: 40 requests/minute) belongs to
+    the KEY, not to any one model, so concurrent pool jobs hitting four
+    different models on the same key are all spending the same budget. Without
+    this, running jobs in parallel just earns 429s faster than running them
+    serially -- the limiter is what makes concurrency actually pay.
+
+    Spaces request *starts* evenly (60/rpm apart) rather than allowing a burst
+    then a stall, because bursts are what trip most providers' limiters.
+    """
+
+    def __init__(self, rpm: int):
+        self.rpm = rpm
+        self.min_interval = 60.0 / max(1, rpm)
+        self._lock = threading.Lock()
+        self._next_ok = 0.0
+        self.waits = 0
+        self.total_wait_s = 0.0
+
+    def acquire(self) -> float:
+        with self._lock:
+            now = time.monotonic()
+            wait = max(0.0, self._next_ok - now)
+            self._next_ok = max(now, self._next_ok) + self.min_interval
+            if wait > 0:
+                self.waits += 1
+                self.total_wait_s += wait
+        if wait > 0:
+            time.sleep(wait)
+        return wait
+
+
+# Permanent failures -- retrying these burns the call deadline for nothing.
+# 410 Gone is real and observed: deepseek-v4-pro-0813 was retired from NVIDIA's
+# catalogue while still listed on its models page.
+PERMANENT_HTTP = {400, 401, 403, 404, 410, 422}
+
+
+class PermanentProviderError(RuntimeError):
+    """A failure retrying cannot fix: retired model, bad key, malformed request.
+    Raised past the retry loop so it fails in seconds instead of burning the
+    whole call deadline on four identical rejections."""
 
 
 def _load_dotenv() -> None:
@@ -104,7 +151,8 @@ class LiveProvider(Provider):
 
     def __init__(self, model: str = PINNED_MODEL, base_url: str = PINNED_BASE_URL,
                  api_key: str | None = None, temperature: float = 0.2,
-                 budget_usd: float = BUDGET_USD):
+                 budget_usd: float = BUDGET_USD,
+                 rate_limiter: "RateLimiter | None" = None):
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key or os.environ.get(API_KEY_ENV)
@@ -117,6 +165,8 @@ class LiveProvider(Provider):
         self.spent_usd = 0.0
         self.calls = 0
         self.backend = "anthropic" if "anthropic.com" in self.base_url else "openai"
+        # Shared across every provider on the same key; see RateLimiter.
+        self.rate_limiter = rate_limiter
 
     def _request(self, system: str, user: str, max_tokens: int):
         """Build (url, headers, body) for the configured backend."""
@@ -198,8 +248,19 @@ class LiveProvider(Provider):
                 last = last or "no time left in the call deadline"
                 break
             try:
+                if self.rate_limiter is not None:
+                    self.rate_limiter.acquire()
+                    remaining = deadline_s - (time.monotonic() - started)
+                    if remaining <= 5:
+                        last = last or "call deadline spent waiting on the rate limiter"
+                        break
                 r = requests.post(url, headers=headers, json=body,
                                   timeout=min(90, remaining))
+                if r.status_code in PERMANENT_HTTP:
+                    # No point retrying a retired model or a bad key -- fail
+                    # now rather than spending the whole deadline on it.
+                    raise PermanentProviderError(
+                        f"permanent HTTP {r.status_code}: {r.text[:200]}")
                 if r.status_code == 429 or r.status_code >= 500:
                     last = f"HTTP {r.status_code}: {r.text[:200]}"
                     time.sleep(min(2 ** attempt, max(0.0, remaining - 1)))
@@ -212,6 +273,8 @@ class LiveProvider(Provider):
                 if text is None:
                     raise RuntimeError(f"empty response content ({diag})")
                 return Completion(text, usage, data)
+            except PermanentProviderError:
+                raise
             except Exception as e:  # noqa: BLE001
                 last = repr(e)
                 remaining = deadline_s - (time.monotonic() - started)
