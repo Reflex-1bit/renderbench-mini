@@ -1,0 +1,81 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:deepseek-flash",
+  "model": "deepseek-ai/deepseek-v4-flash-0731",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    H, W, _ = page.shape\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    out = page.copy()\n    \n    # Precompute 1/8 phase offsets for bilinear interpolation\n    # We'll use 8x8 supersampling per pixel for sub-pixel accuracy\n    # But that's expensive; instead use bilinear with 1/8 phase resolution\n    # by precomputing weights for each possible fractional part (0..7)/8\n    \n    # For each glyph, we'll do bilinear resampling with fractional offsets\n    # quantized to 1/8 pixel. This gives 1/8 px phase resolution.\n    \n    # Precompute bilinear weights for 8 possible fractional offsets\n    # weights for x: (1-frac, frac) for each frac in 0..7/8\n    fx_weights = np.zeros((8, 2), dtype=np.float32)\n    fy_weights = np.zeros((8, 2), dtype=np.float32)\n    for i in range(8):\n        f = i / 8.0\n        fx_weights[i, 0] = 1.0 - f\n        fx_weights[i, 1] = f\n        fy_weights[i, 0] = 1.0 - f\n        fy_weights[i, 1] = f\n    \n    n = len(gid)\n    for i in range(n):\n        g = gid[i]\n        y0 = int(gy[i])\n        x0 = int(gx[i])\n        fy = gy[i] - y0\n        fx = gx[i] - x0\n        \n        # Quantize fractional parts to 1/8\n        fy_idx = int(round(fy * 8)) % 8\n        fx_idx = int(round(fx * 8)) % 8\n        \n        # Get coverage tile\n        cov = atlas[g]  # (gh, gw) uint8\n        \n        # Bilinear resample: for each output pixel, we need coverage from\n        # the 2x2 neighborhood. We'll build a resampled coverage array.\n        # Since glyphs are small, we can do this per glyph.\n        \n        # Compute resampled coverage using bilinear with quantized phase\n        # We'll create an output coverage array of same size as glyph box\n        # but with fractional offset applied.\n        \n        # For each pixel in the glyph box, the source coordinates are\n        # (row + fy, col + fx) in the atlas tile.\n        # We'll use vectorized indexing.\n        \n        # Build coordinate grids\n        rows = np.arange(gh, dtype=np.float32) + fy\n        cols = np.arange(gw, dtype=np.float32) + fx\n        \n        # Integer and fractional parts\n        y_int = rows.astype(np.int32)\n        x_int = cols.astype(np.int32)\n        y_frac = rows - y_int\n        x_frac = cols - x_int\n        \n        # Clamp to valid range (should be within bounds since placements don't cross edge)\n        y_int = np.clip(y_int, 0, gh-1)\n        x_int = np.clip(x_int, 0, gw-1)\n        y_int_plus = np.clip(y_int + 1, 0, gh-1)\n        x_int_plus = np.clip(x_int + 1, 0, gw-1)\n        \n        # Gather 4 corners\n        c00 = cov[y_int[:, None], x_int[None, :]].astype(np.float32)\n        c01 = cov[y_int[:, None], x_int_plus[None, :]].astype(np.float32)\n        c10 = cov[y_int_plus[:, None], x_int[None, :]].astype(np.float32)\n        c11 = cov[y_int_plus[:, None], x_int_plus[None, :]].astype(np.float32)\n        \n        # Bilinear weights\n        w00 = (1 - y_frac[:, None]) * (1 - x_frac[None, :])\n        w01 = (1 - y_frac[:, None]) * x_frac[None, :]\n        w10 = y_frac[:, None] * (1 - x_frac[None, :])\n        w11 = y_frac[:, None] * x_frac[None, :]\n        \n        resampled = (c00 * w00 + c01 * w01 + c10 * w10 + c11 * w11)\n        \n        # Convert to alpha in [0,1]\n        alpha = resampled / 255.0\n        \n        # Blend region\n        y_end = y0 + gh\n        x_end = x0 + gw\n        region = out[y0:y_end, x0:x_end].astype(np.float32)\n        \n        # Blend: page = page * (1 - a) + rgb * a\n        rgb_i = rgb[i].astype(np.float32)  # (3,)\n        # alpha shape (gh, gw, 1) for broadcasting\n        a = alpha[:, :, None]\n        blended = region * (1 - a) + rgb_i[None, None, :] * a\n        \n        out[y0:y_end, x0:x_end] = np.clip(blended, 0, 255).astype(np.uint8)\n    \n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [max_pixel_err] ssim=0.99868 (floor 0.998) max_px=0.6627 (cap 0.1) bad_frac=0.00062 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [max_pixel_err] ssim=0.99868 (floor 0.998) max_px=0.6627 (cap 0.1) bad_frac=0.00062 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.9986805657764458,
+            "max_pixel_err": 0.6627450980392157,
+            "bad_frac": 0.0006230672200520834
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "The kernel fails because it quantizes the fractional offset to 1/8 pixel before bilinear resampling, but the oracle requires resolving sub-pixel phase to 1/8 px or finer. Rounding `fy` and `fx` to the nearest 1/8 introduces up to 1/16 px error, which is acceptable, but the real problem is that the resampling uses the *quantized* phase while the coordinate grids still use the unquantized `fy`/`fx` for `rows`/`cols`. This mismatch means the weights and the integer indices are inconsistent, producing incorrect coverage. Remove the quantization entirely and use the exact fractional parts directly in the bilinear interpolation; the current code already computes `y_frac`/`x_frac` from the true offsets, so just delete the `fy_idx`/`fx_idx` lines and use `fy`/`fx` directly.",
+      "usage": {
+        "prompt_tokens": 2623,
+        "completion_tokens": 1389,
+        "cost_usd": 0.04784
+      },
+      "wall_s": 259.382,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    H, W, _ = page.shape\n    out = page.copy()\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    # Precompute 1/255 as float32 for speed\n    inv255 = np.float32(1.0 / 255.0)\n    \n    for i in range(len(gid)):\n        g = gid[i]\n        y = gy[i]\n        x = gx[i]\n        yi = int(y)\n        xi = int(x)\n        fy = y - yi\n        fx = x - xi\n        \n        cov = atlas[g]\n        # Bilinear weights\n        w00 = (1.0 - fy) * (1.0 - fx)\n        w01 = (1.0 - fy) * fx\n        w10 = fy * (1.0 - fx)\n        w11 = fy * fx\n        \n        # Compute output region\n        y0 = yi\n        x0 = xi\n        y1 = yi + gh\n        x1 = xi + gw\n        \n        # Extract page region\n        page_region = out[y0:y1, x0:x1].astype(np.float32)\n        \n        # Build coverage via bilinear: cov[y,x] contributes to page[y+fy, x+fx]\n        # We can compute by shifting cov with weights\n        # Use float32 accumulation\n        cov_f = cov.astype(np.float32)\n        \n        # Coverage at each output pixel = sum of contributions from 4 source pixels\n        # For output pixel (oy, ox) in [0, gh), source pixels are (oy, ox), (oy, ox-1), (oy-1, ox), (oy-1, ox-1)\n        # with weights w00, w01, w10, w11 respectively, but only if source in bounds.\n        # We'll build coverage array of shape (gh, gw) using padded cov.\n        # Simpler: use np.roll-like shifts with zero padding.\n        # Create padded cov with one extra row/col on top/left\n        cov_pad = np.zeros((gh+1, gw+1), dtype=np.float32)\n        cov_pad[1:, 1:] = cov_f\n        \n        # Coverage at (oy, ox) = w00*cov_pad[oy+1, ox+1] + w01*cov_pad[oy+1, ox] + w10*cov_pad[oy, ox+1] + w11*cov_pad[oy, ox]\n        # But careful: for output pixel (oy, ox), source pixel (oy, ox) has weight w00, (oy, ox-1) w01, (oy-1, ox) w10, (oy-1, ox-1) w11.\n        # Using cov_pad indexing: cov_pad[oy+1, ox+1] = cov[oy, ox], cov_pad[oy+1, ox] = cov[oy, ox-1] (if ox>0 else 0), etc.\n        # So coverage = w00*cov_pad[1:gh+1, 1:gw+1] + w01*cov_pad[1:gh+1, 0:gw] + w10*cov_pad[0:gh, 1:gw+1] + w11*cov_pad[0:gh, 0:gw]\n        coverage = (w00 * cov_pad[1:gh+1, 1:gw+1] +\n                    w01 * cov_pad[1:gh+1, 0:gw] +\n                    w10 * cov_pad[0:gh, 1:gw+1] +\n                    w11 * cov_pad[0:gh, 0:gw])\n        \n        # Clip to [0,1]? Coverage should be in [0,1] since weights sum to 1 and cov in [0,1] (uint8/255)\n        # But due to float rounding, clamp\n        coverage = np.clip(coverage, 0.0, 1.0)\n        \n        # Blend\n        a = coverage[..., None]  # (gh, gw, 1)\n        rgb_i = rgb[i].astype(np.float32)  # (3,)\n        # page = page * (1-a) + rgb * a\n        blended = page_region * (1.0 - a) + rgb_i * a\n        # Round to nearest and cast back\n        out[y0:y1, x0:x1] = np.rint(blended).astype(np.uint8)\n    \n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.68179 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.15683 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.68179 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.15683 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.6817872502260376,
+            "max_pixel_err": 1.0,
+            "bad_frac": 0.156829833984375
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 1045,
+        "completion_tokens": 1030,
+        "cost_usd": 0.030975
+      },
+      "wall_s": 147.093,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.078815
+}

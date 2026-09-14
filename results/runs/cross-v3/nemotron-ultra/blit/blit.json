@@ -1,0 +1,127 @@
+{
+  "task_id": "blit",
+  "provider": "nim:nemotron-ultra",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H, W = dst.shape[:2]\n    sh, sw = src.shape[:2]\n    \n    # Calculate source region that maps to valid destination\n    src_y_start = max(0, -dy)\n    src_y_end = min(sh, H - dy)\n    src_x_start = max(0, -dx)\n    src_x_end = min(sw, W - dx)\n    \n    # Check if there's any overlap\n    if src_y_start >= src_y_end or src_x_start >= src_x_end:\n        return dst.copy()\n    \n    # Calculate destination region\n    dst_y_start = dy + src_y_start\n    dst_y_end = dy + src_y_end\n    dst_x_start = dx + src_x_start\n    dst_x_end = dx + src_x_end\n    \n    # Create output and copy\n    out = dst.copy()\n    out[dst_y_start:dst_y_end, dst_x_start:dst_x_end] = src[src_y_start:src_y_end, src_x_start:src_x_end]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.6815000087954104,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 16.616727593958394,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.6815000087954104,
+          "mean_ms": 0.6798800022806972,
+          "p05_ms": 0.6603999936487526,
+          "p95_ms": 0.7037999748717993,
+          "iqr_ms": 0.027400004910305142,
+          "cv": 0.020431277871307774,
+          "trials": 15,
+          "samples_ms": [
+            0.6604,
+            0.6625,
+            0.6629,
+            0.6653,
+            0.6681,
+            0.6744,
+            0.6759,
+            0.6815,
+            0.6823,
+            0.6852,
+            0.6855,
+            0.6927,
+            0.6977,
+            0.7,
+            0.7038
+          ]
+        }
+      },
+      "critique": "The kernel is correct and fast. The largest remaining headroom is the full-frame `dst.copy()` (11.3 ms baseline) which dominates runtime even when the blit region is tiny. Replace it with a lazy copy: allocate `out = np.empty_like(dst)`, copy only the four untouched rectangular strips (top, bottom, left, right of the blit box) from `dst` into `out`, then write the blit region. This reduces memory traffic from O(H\u00d7W) to O(H\u00d7W \u2212 blit_area) and eliminates the single largest memcpy.",
+      "usage": {
+        "prompt_tokens": 1224,
+        "completion_tokens": 380,
+        "cost_usd": 0.01562
+      },
+      "wall_s": 102.555,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H, W = dst.shape[:2]\n    sh, sw = src.shape[:2]\n\n    # Destination region that will be overwritten\n    y0 = max(0, dy)\n    y1 = min(H, dy + sh)\n    x0 = max(0, dx)\n    x1 = min(W, dx + sw)\n\n    # Corresponding source region\n    sy0 = y0 - dy\n    sy1 = sy0 + (y1 - y0)\n    sx0 = x0 - dx\n    sx1 = sx0 + (x1 - x0)\n\n    # Allocate output\n    out = np.empty_like(dst)\n\n    # Copy untouched strips from dst\n    # Top strip\n    if y0 > 0:\n        out[:y0] = dst[:y0]\n    # Bottom strip\n    if y1 < H:\n        out[y1:] = dst[y1:]\n    # Left strip (middle rows)\n    if x0 > 0:\n        out[y0:y1, :x0] = dst[y0:y1, :x0]\n    # Right strip (middle rows)\n    if x1 < W:\n        out[y0:y1, x1:] = dst[y0:y1, x1:]\n\n    # Blit source into the overlapping region\n    if y0 < y1 and x0 < x1:\n        out[y0:y1, x0:x1] = src[sy0:sy1, sx0:sx1]\n\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.7528999994974583,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 15.040908499126402,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.7528999994974583,
+          "mean_ms": 0.780653334610785,
+          "p05_ms": 0.6864999886602163,
+          "p95_ms": 1.0173000046052039,
+          "iqr_ms": 0.06100002792663872,
+          "cv": 0.10189012467767918,
+          "trials": 15,
+          "samples_ms": [
+            0.6865,
+            0.701,
+            0.7254,
+            0.7403,
+            0.7446,
+            0.7527,
+            0.7528,
+            0.7529,
+            0.7636,
+            0.7691,
+            0.799,
+            0.8013,
+            0.8063,
+            0.897,
+            1.0173
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 755,
+        "completion_tokens": 363,
+        "cost_usd": 0.01285
+      },
+      "wall_s": 107.808,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 0,
+  "best_ms": 0.6815000087954104,
+  "best_speedup": 16.616727593958394,
+  "best_kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H, W = dst.shape[:2]\n    sh, sw = src.shape[:2]\n    \n    # Calculate source region that maps to valid destination\n    src_y_start = max(0, -dy)\n    src_y_end = min(sh, H - dy)\n    src_x_start = max(0, -dx)\n    src_x_end = min(sw, W - dx)\n    \n    # Check if there's any overlap\n    if src_y_start >= src_y_end or src_x_start >= src_x_end:\n        return dst.copy()\n    \n    # Calculate destination region\n    dst_y_start = dy + src_y_start\n    dst_y_end = dy + src_y_end\n    dst_x_start = dx + src_x_start\n    dst_x_end = dx + src_x_end\n    \n    # Create output and copy\n    out = dst.copy()\n    out[dst_y_start:dst_y_end, dst_x_start:dst_x_end] = src[src_y_start:src_y_end, src_x_start:src_x_end]\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.028470000000000002
+}

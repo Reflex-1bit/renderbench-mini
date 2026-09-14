@@ -1,0 +1,73 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:kimi-k3",
+  "model": "moonshotai/kimi-k3",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    out = page.astype(np.float32)\n    H, W, _ = out.shape\n    gh, gw = atlas.shape[1], atlas.shape[2]\n\n    for i in range(len(gid)):\n        y = float(gy[i])\n        x = float(gx[i])\n        y0 = int(np.floor(y))\n        x0 = int(np.floor(x))\n        fy = y - y0\n        fx = x - x0\n\n        cov = atlas[gid[i]].astype(np.float32)\n\n        # Bilinear resample of coverage at fractional offset.\n        # Equivalent to shifting the glyph by (fy, fx) with bilinear interpolation.\n        # Build shifted coverage of same (gh, gw) footprint plus one pixel spill.\n        h = gh + 1\n        w = gw + 1\n        shifted = np.zeros((h, w), dtype=np.float32)\n\n        fx0 = 1.0 - fx\n        fy0 = 1.0 - fy\n\n        # Distribute each source pixel to 4 destinations.\n        shifted[:gh, :gw] += cov * (fy0 * fx0)\n        shifted[:gh, 1:gw + 1] += cov * (fy0 * fx)\n        shifted[1:gh + 1, :gw] += cov * (fy * fx0)\n        shifted[1:gh + 1, 1:gw + 1] += cov * (fy * fx)\n\n        # Clip to page bounds (placements never cross page edge, but be safe).\n        sy0 = max(0, y0)\n        sx0 = max(0, x0)\n        sy1 = min(H, y0 + h)\n        sx1 = min(W, x0 + w)\n        if sy1 <= sy0 or sx1 <= sx0:\n            continue\n\n        ty0 = sy0 - y0\n        tx0 = sx0 - x0\n        ty1 = ty0 + (sy1 - sy0)\n        tx1 = tx0 + (sx1 - sx0)\n\n        a = shifted[ty0:ty1, tx0:tx1] * (1.0 / 255.0)\n        a3 = a[:, :, None]\n\n        tile = out[sy0:sy1, sx0:sx1]\n        color = np.asarray(rgb[i], dtype=np.float32)\n        tile[:] = tile * (1.0 - a3) + color * a3\n\n    return np.rint(out).astype(np.uint8)",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.7458271927767557,
+            "max_pixel_err": 0.9725490196078431,
+            "bad_frac": 0.11052576700846355
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "The bilinear weights are transposed. `shifted[:gh, :gw] += cov * (fy0 * fx0)` puts the largest weight on the unshifted copy, which is correct only if the glyph moves by (fy, fx) in the direction of increasing index \u2014 but the four slices as written smear the glyph *backwards*: the `fy0*fx0` term lands at the original position while the `fy*fx` term lands at +1,+1, which is consistent, so the real defect is elsewhere: the blend writes `tile[:] = tile*(1-a3) + color*a3` where `a` is coverage of the *shifted* glyph, fine \u2014 but `shifted` is never divided by anything and `cov` is reused across iterations only via fresh `astype`, fine. The actual bug: `atlas[gid[i]]` \u2014 `gid` indexes glyphs, correct \u2014 but `rgb[i]` is blended over the full (gh+1, gw+1) box including the spill row/col where coverage is zero, harmless. The decisive error is `ssim=0.75, bad_frac=0.11`: an 11% bad fraction with huge pixel error means whole glyphs are wrong, not phase error. `gid` may be a non-integer or shaped array; more likely `gy`/`gx` are arrays where `float(gy[i])` works, but `atlas[gid[i]]` with float gid would raise \u2014 it didn't. Recheck: the spill row `shifted[gh, :]` and col `[:, gw]` receive weight, extending the glyph one pixel past its box; placements never cross the edge so clipping is inert. The single root cause: weights use `fy0=1-fy` paired with the *unshifted* slice, so a glyph at fy=0.9 gets 90% of its mass at the integer position and only 10% shifted down \u2014 the phase is inverted. Swap so weight `fy` multiplies the down-shifted slices: top row gets `fy0`, bottom row `fy` \u2014 which is what the code does. Therefore the true root cause is the colour broadcast: `color*a3` with `color` shape (3,) is fine. Given the magnitude, the root cause is that `out` accumulates in float32 but `tile[:] = tile*(1-a3)+color*a3` reads `tile` after `a3` was computed from `shifted` \u2014 consistent. Final diagnosis: the phase convention is inverted relative to the oracle \u2014 the oracle places the glyph's top-left at the integer part and shifts *content* by the fractional remainder, meaning weight `fy` belongs on the row offset by +1 only when sampling backward; this kernel shifts forward, moving every glyph up to 1 px from the reference, which at small glyph sizes yields exactly ~0.75 SSIM and 11% bad pixels. Sample the atlas at `y - y0` (backward gather) instead of scattering forward.",
+      "usage": {
+        "prompt_tokens": 2003,
+        "completion_tokens": 1213,
+        "cost_usd": 0.04034
+      },
+      "wall_s": 194.381,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    out = page.astype(np.float32)\n    H, W = out.shape[0], out.shape[1]\n    gh, gw = atlas.shape[1], atlas.shape[2]\n\n    gid = np.asarray(gid).astype(np.intp).ravel()\n    gy = np.asarray(gy, dtype=np.float64).ravel()\n    gx = np.asarray(gx, dtype=np.float64).ravel()\n    rgb = np.asarray(rgb, dtype=np.float32).reshape(-1, 3)\n\n    n = gid.shape[0]\n    for i in range(n):\n        y = gy[i]\n        x = gx[i]\n        y0 = int(np.floor(y))\n        x0 = int(np.floor(x))\n        fy = np.float32(y - y0)\n        fx = np.float32(x - x0)\n\n        cov = atlas[gid[i]].astype(np.float32)\n\n        # Backward (gather) bilinear resample: destination pixel (r, c) samples\n        # the source coverage at (r - fy, c - fx).  Equivalent to scattering\n        # the source forward with weights (1-fy)(1-fx), (1-fy)fx, fy(1-fx), fyfx\n        # onto rows [y0, y0+gh] and cols [x0, x0+gw].\n        fy0 = np.float32(1.0) - fy\n        fx0 = np.float32(1.0) - fx\n\n        w00 = fy0 * fx0\n        w01 = fy0 * fx\n        w10 = fy * fx0\n        w11 = fy * fx\n\n        shifted = np.zeros((gh + 1, gw + 1), dtype=np.float32)\n        shifted[:gh, :gw] += cov * w00\n        shifted[:gh, gw:] += cov * w01\n        shifted[gh:, :gw] += cov * w10\n        shifted[gh:, gw:] += cov * w11\n\n        a = shifted * (np.float32(1.0) / np.float32(255.0))\n        a3 = a[:, :, None]\n\n        ys = y0\n        xs = x0\n        ye = min(y0 + gh + 1, H)\n        xe = min(x0 + gw + 1, W)\n\n        tile = out[ys:ye, xs:xe]\n        aa = a3[: ye - ys, : xe - xs]\n        color = rgb[i]\n        tile[:] = tile * (1.0 - aa) + color * aa\n\n    return np.rint(out).astype(np.uint8)",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\renderbench-mini\\renderbench\\_worker.py\", line 54, in main\n    got = fn(**inputs)\n  File \"<candidate>\", line 39, in kernel\nValueError: non-broadcastable output operand with shape (24,1) doesn't match the broadcast shape (24,16)\n",
+        "timing": null,
+        "stage": "run",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 1499,
+        "completion_tokens": 594,
+        "cost_usd": 0.022345
+      },
+      "wall_s": 69.758,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.062685
+}

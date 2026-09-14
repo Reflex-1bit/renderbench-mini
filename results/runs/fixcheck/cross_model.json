@@ -1,0 +1,41 @@
+{
+  "tag": "fixcheck",
+  "timestamp_utc": "20260914T090140Z",
+  "models": {
+    "deepseek-flash": "deepseek-ai/deepseek-v4-flash-0731"
+  },
+  "tasks": [
+    "glyph_atlas_blit"
+  ],
+  "rounds": 1,
+  "endpoint": "https://integrate.api.nvidia.com/v1",
+  "rpm_limit": 40,
+  "limiter_waits": 0,
+  "limiter_total_wait_s": 0.0,
+  "wall_s": 597.6,
+  "n_solved": 0,
+  "n_jobs": 1,
+  "results": [
+    {
+      "model": "deepseek-flash",
+      "task": "glyph_atlas_blit",
+      "status": "ok",
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "baseline_ms": 43.831449998833705,
+      "best_ms": null,
+      "best_speedup": null,
+      "wall_s": 597.640181099996,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 597s (deadline 600s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=291.65154",
+          "completion_tokens": 0,
+          "wall_s": 597.632
+        }
+      ]
+    }
+  ]
+}

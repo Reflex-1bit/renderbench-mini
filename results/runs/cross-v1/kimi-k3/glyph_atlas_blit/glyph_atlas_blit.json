@@ -1,0 +1,73 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:kimi-k3",
+  "model": "moonshotai/kimi-k3",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    out = page.astype(np.float32)\n    gh = atlas.shape[1]\n    gw = atlas.shape[2]\n    inv255 = np.float32(1.0 / 255.0)\n\n    for i in range(len(gid)):\n        g = atlas[gid[i]]\n        y0 = int(gy[i])\n        x0 = int(gx[i])\n        fy = np.float32(gy[i] - y0)\n        fx = np.float32(gx[i] - x0)\n\n        gf = g.astype(np.float32)\n        cov = np.empty((gh + 1, gw + 1), dtype=np.float32)\n        w00 = (1.0 - fy) * (1.0 - fx)\n        w10 = fy * (1.0 - fx)\n        w01 = (1.0 - fy) * fx\n        w11 = fy * fx\n\n        cov[:gh, :gw] = gf * w00\n        cov[1:, :gw] += gf * w10\n        cov[:gh, 1:] += gf * w01\n        cov[1:, 1:] += gf * w11\n        cov *= inv255\n\n        region = out[y0:y0 + gh + 1, x0:x0 + gw + 1]\n        a = cov[..., None]\n        region *= (1.0 - a)\n        region += a * np.asarray(rgb[i], dtype=np.float32)\n\n    return np.rint(out).astype(np.uint8)",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.73549 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.11141 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.73549 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.11141 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.7354934265441919,
+            "max_pixel_err": 1.0,
+            "bad_frac": 0.11141204833984375
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "[advisor call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.85980460001156)\"))]",
+      "usage": {
+        "prompt_tokens": 828,
+        "completion_tokens": 717,
+        "cost_usd": 0.022065
+      },
+      "wall_s": 406.354,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.85313909998513)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 240.355,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.022065
+}

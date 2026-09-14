@@ -1,0 +1,81 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:nemotron-ultra",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\nfrom numpy.lib.stride_tricks import sliding_window_view\n\n# Precompute 8x8 bilinear interpolation weights for 1/8-pixel subpixel precision\n# Weights shape: (8, 8, 2, 2) for dy, dx, and 2x2 kernel\n_dy = np.arange(8) / 8.0\n_dx = np.arange(8) / 8.0\n_wy0 = 1.0 - _dy[:, None]  # (8, 1)\n_wy1 = _dy[:, None]        # (8, 1)\n_wx0 = 1.0 - _dx[None, :]  # (1, 8)\n_wx1 = _dx[None, :]        # (1, 8)\n\n# (8, 8, 2, 2) weights for bilinear interpolation\n_BILINEAR_WEIGHTS = np.stack([\n    np.stack([_wy0 * _wx0, _wy0 * _wx1], axis=-1),\n    np.stack([_wy1 * _wx0, _wy1 * _wx1], axis=-1)\n], axis=-2).astype(np.float32)  # (8, 8, 2, 2)\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    H, W, _ = page.shape\n    n_glyphs = len(gid)\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    \n    # Work in float32 for blending\n    page_f = page.astype(np.float32) / 255.0  # (H, W, 3)\n    rgb_f = rgb.astype(np.float32) / 255.0    # (n_glyphs, 3)\n    \n    # Integer and fractional parts\n    gy_int = gy.astype(np.int32)\n    gx_int = gx.astype(np.int32)\n    gy_frac = gy - gy_int\n    gx_frac = gx - gx_int\n    \n    # Quantize fractional parts to 1/8 pixel (8 subpixel positions)\n    sub_y = np.clip((gy_frac * 8).astype(np.int32), 0, 7)\n    sub_x = np.clip((gx_frac * 8).astype(np.int32), 0, 7)\n    \n    # Process each glyph\n    for i in range(n_glyphs):\n        g = gid[i]\n        y0, x0 = gy_int[i], gx_int[i]\n        sy, sx = sub_y[i], sub_x[i]\n        \n        # Get glyph coverage (gh, gw) as float32 [0, 1]\n        coverage = atlas[g].astype(np.float32) / 255.0\n        \n        # Bilinear interpolation using precomputed weights\n        # We need to interpolate coverage to (gh, gw) at fractional offset (sy/8, sx/8)\n        # Using 2x2 kernel: coverage[y:y+2, x:x+2] @ weights[sy, sx]\n        \n        # Pad coverage with zeros on right and bottom for interpolation\n        # Shape: (gh+1, gw+1)\n        cov_padded = np.pad(coverage, ((0, 1), (0, 1)), mode='constant')\n        \n        # Get 2x2 neighborhoods for all pixels: (gh, gw, 2, 2)\n        # Using sliding_window_view for efficient 2x2 extraction\n        neighborhoods = sliding_window_view(cov_padded, (2, 2))  # (gh, gw, 2, 2)\n        \n        # Apply bilinear weights for this subpixel position\n        weights = _BILINEAR_WEIGHTS[sy, sx]  # (2, 2)\n        interp_coverage = np.sum(neighborhoods * weights, axis=(-2, -1))  # (gh, gw)\n        \n        # Blend onto page\n        y1, x1 = y0 + gh, x0 + gw\n        page_tile = page_f[y0:y1, x0:x1]  # (gh, gw, 3)\n        color = rgb_f[i]  # (3,)\n        \n        # Alpha blending: page * (1 - a) + color * a\n        # interp_coverage is (gh, gw), broadcast to (gh, gw, 3)\n        a = interp_coverage[..., np.newaxis]  # (gh, gw, 1)\n        page_tile = page_tile * (1.0 - a) + color * a\n        \n        page_f[y0:y1, x0:x1] = page_tile\n    \n    # Convert back to uint8 with rounding\n    result = np.clip(page_f * 255.0 + 0.5, 0, 255).astype(np.uint8)\n    return result",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err] ssim=0.99737 (floor 0.998) max_px=0.1765 (cap 0.1) bad_frac=0.00035 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err] ssim=0.99737 (floor 0.998) max_px=0.1765 (cap 0.1) bad_frac=0.00035 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.9973655264326036,
+            "max_pixel_err": 0.17647058823529416,
+            "bad_frac": 0.0003496805826822917
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "The bilinear interpolation is applied to the glyph coverage *before* placement, but the spec requires resampling the coverage *at* the fractional page position. Your `sliding_window_view` interpolates between adjacent texels of the glyph bitmap, effectively scaling the glyph. Instead, you must treat the glyph as a piecewise-constant signal and reconstruct it at the fractional destination coordinates. For each destination pixel `(y, x)`, compute the four source coordinates `(y0+dy, x0+dx)` with `dy,dx \u2208 {0,1}`, weight them by the fractional offset, and accumulate coverage from the corresponding glyph texels (clamped to glyph bounds). The current approach shifts the glyph's internal features rather than shifting the glyph as a whole.",
+      "usage": {
+        "prompt_tokens": 2606,
+        "completion_tokens": 1272,
+        "cost_usd": 0.04483
+      },
+      "wall_s": 114.196,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\nfrom numpy.lib.stride_tricks import sliding_window_view\n\n# Precompute 8x8 bilinear weights for 1/8-pixel sub-pixel precision\n# Weights shape: (8, 8, 2, 2) for (fy, fx, dy, dx)\n_fy = np.arange(8) / 8.0\n_fx = np.arange(8) / 8.0\n_wy0 = 1.0 - _fy[:, None]  # (8, 1)\n_wy1 = _fy[:, None]        # (8, 1)\n_wx0 = 1.0 - _fx[None, :]  # (1, 8)\n_wx1 = _fx[None, :]        # (1, 8)\n\n# Combine into (8, 8, 2, 2)\n_BILINEAR_WEIGHTS = np.empty((8, 8, 2, 2), dtype=np.float32)\n_BILINEAR_WEIGHTS[:, :, 0, 0] = _wy0 * _wx0\n_BILINEAR_WEIGHTS[:, :, 0, 1] = _wy0 * _wx1\n_BILINEAR_WEIGHTS[:, :, 1, 0] = _wy1 * _wx0\n_BILINEAR_WEIGHTS[:, :, 1, 1] = _wy1 * _wx1\n\ndef kernel(page, atlas, gid, gy, gx, rgb):\n    \"\"\"\n    Composite glyphs onto page with sub-pixel positioning using bilinear\n    reconstruction of piecewise-constant glyph coverage.\n    \"\"\"\n    H, W, _ = page.shape\n    n_glyphs, gh, gw = atlas.shape\n    n = len(gid)\n    \n    # Work in float32 for blending\n    page_f = page.astype(np.float32) / 255.0\n    atlas_f = atlas.astype(np.float32) / 255.0\n    rgb_f = rgb.astype(np.float32) / 255.0\n    \n    # Integer and fractional parts of positions\n    gy_int = gy.astype(np.int32)\n    gx_int = gx.astype(np.int32)\n    gy_frac = gy - gy_int\n    gx_frac = gx - gx_int\n    \n    # Quantize fractional parts to 1/8 pixel for LUT\n    fy_idx = np.clip((gy_frac * 8).astype(np.int32), 0, 7)\n    fx_idx = np.clip((gx_frac * 8).astype(np.int32), 0, 7)\n    \n    # Process each glyph\n    for i in range(n):\n        g = gid[i]\n        y0 = gy_int[i]\n        x0 = gx_int[i]\n        fy = fy_idx[i]\n        fx = fx_idx[i]\n        \n        # Glyph coverage (gh, gw)\n        glyph = atlas_f[g]\n        \n        # Pad glyph with zeros for boundary handling\n        # Pad 1 pixel on bottom and right for bilinear access\n        glyph_pad = np.pad(glyph, ((0, 1), (0, 1)), mode='constant')\n        \n        # Get bilinear weights for this sub-pixel offset\n        # Shape: (2, 2)\n        w = _BILINEAR_WEIGHTS[fy, fx]\n        \n        # Compute interpolated coverage at destination pixels\n        # For each destination pixel (y, x), we need glyph[y-y0, x-x0] interpolated\n        # The four source texels are at (dy, dx) \u2208 {0,1}\u00b2 relative to base\n        # Base coordinates in glyph space: y - y0 - dy, x - x0 - dx\n        \n        # Create 2x2 views of the padded glyph for the four corners\n        # View for (dy=0, dx=0): glyph_pad[y-y0 : y-y0+gh, x-x0 : x-x0+gw]\n        # But we need to extract the region that maps to page[y0:y0+gh, x0:x0+gw]\n        \n        # Destination region on page\n        y1 = y0 + gh\n        x1 = x0 + gw\n        \n        # Extract the four shifted versions of the glyph\n        # c00: glyph_pad[0:gh, 0:gw] -> maps to page[y0:y1, x0:x1]\n        # c01: glyph_pad[0:gh, 1:gw+1] -> maps to page[y0:y1, x0:x1]\n        # c10: glyph_pad[1:gh+1, 0:gw] -> maps to page[y0:y1, x0:x1]\n        # c11: glyph_pad[1:gh+1, 1:gw+1] -> maps to page[y0:y1, x0:x1]\n        \n        c00 = glyph_pad[0:gh, 0:gw]\n        c01 = glyph_pad[0:gh, 1:gw+1]\n        c10 = glyph_pad[1:gh+1, 0:gw]\n        c11 = glyph_pad[1:gh+1, 1:gw+1]\n        \n        # Bilinear interpolation\n        coverage = (w[0,0] * c00 + w[0,1] * c01 + \n                    w[1,0] * c10 + w[1,1] * c11)\n        \n        # Blend onto page\n        # page = page * (1 - a) + rgb * a\n        # where a = coverage\n        color = rgb_f[i]  # (3,)\n        page_tile = page_f[y0:y1, x0:x1]  # (gh, gw, 3)\n        \n        # Expand coverage to 3 channels\n        a = coverage[..., np.newaxis]  # (gh, gw, 1)\n        \n        # Blend\n        page_f[y0:y1, x0:x1] = page_tile * (1.0 - a) + color * a\n    \n    # Convert back to uint8 with rounding\n    result = np.clip(page_f * 255.0 + 0.5, 0, 255).astype(np.uint8)\n    return result",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err] ssim=0.99737 (floor 0.998) max_px=0.1765 (cap 0.1) bad_frac=0.00035 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err] ssim=0.99737 (floor 0.998) max_px=0.1765 (cap 0.1) bad_frac=0.00035 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.9973655275416364,
+            "max_pixel_err": 0.17647058823529416,
+            "bad_frac": 0.0003496805826822917
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 1036,
+        "completion_tokens": 1467,
+        "cost_usd": 0.041855
+      },
+      "wall_s": 203.837,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.086685
+}

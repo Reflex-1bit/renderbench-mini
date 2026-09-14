@@ -1,0 +1,41 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:muse-glimmer",
+  "model": "meta/muse-glimmer-30b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\nimport numba\n\n\n@numba.njit\ndef _blit(out, atlas, gid, gy, gx, rgb):\n    n = gid.shape[0]\n    gh = atlas.shape[1]\n    gw = atlas.shape[2]\n    H = out.shape[0]\n    W = out.shape[1]\n    inv255 = 0.00392156862745098\n    for i in range(n):\n        g = gid[i]\n        yf = gy[i]\n        xf = gx[i]\n        y_start = int(np.ceil(yf))\n        y_end = int(np.floor(yf + gh - 1e-7)) + 1\n        x_start = int(np.ceil(xf))\n        x_end = int(np.floor(xf + gw - 1e-7)) + 1\n        if y_start < 0:\n            y_start = 0\n        if x_start < 0:\n            x_start = 0\n        if y_end > H:\n            y_end = H\n        if x_end > W:\n            x_end = W\n        r = rgb[i, 0]\n        gc = rgb[i, 1]\n        b = rgb[i, 2]\n        for dy in range(y_start, y_end):\n            sy = dy - yf\n            sy0 = int(sy)\n            if sy0 < 0 or sy0 >= gh:\n                continue\n            sy1 = sy0 + 1\n            wy1 = sy - sy0\n            wy0 = 1.0 - wy1\n            for dx in range(x_start, x_end):\n                sx = dx - xf\n                sx0 = int(sx)\n                if sx0 < 0 or sx0 >= gw:\n                    continue\n                sx1 = sx0 + 1\n                wx1 = sx - sx0\n                wx0 = 1.0 - wx1\n\n                c00 = float(atlas[g, sy0, sx0])\n                c01 = 0.0\n                c10 = 0.0\n                c11 = 0.0\n                if sx1 < gw:\n                    c01 = float(atlas[g, sy0, sx1])\n                    if sy1 < gh:\n                        c10 = float(atlas[g, sy1, sx0])\n                        c11 = float(atlas[g, sy1, sx1])\n                else:\n                    if sy1 < gh:\n                        c10 = float(atlas[g, sy1, sx0])\n\n                cov = wy0 * wx0 * c00 + wy0 * wx1 * c01 + wy1 * wx0 * c10 + wy1 * wx1 * c11\n                if cov <= 0.0:\n                    continue\n                a = cov * inv255\n                inv = 1.0 - a\n                or_ = out[dy, dx, 0]\n                og = out[dy, dx, 1]\n                ob = out[dy, dx, 2]\n                out[dy, dx, 0] = or_ * inv + r * a\n                out[dy, dx, 1] = og * inv + gc * a\n                out[dy, dx, 2] = ob * inv + b * a\n\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    out = page.astype(np.float32, copy=True)\n    rgb_f = np.asarray(rgb, dtype=np.float32)\n    gid_i = np.asarray(gid, dtype=np.int64)\n    gy_f = np.asarray(gy, dtype=np.float64)\n    gx_f = np.asarray(gx, dtype=np.float64)\n    _blit(out, atlas, gid_i, gy_f, gx_f, rgb_f)\n    out_u8 = np.rint(np.clip(out, 0, 255)).astype(np.uint8)\n    return out_u8",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "Traceback (most recent call last):\n  File \"C:\\Users\\adity\\renderbench-mini\\renderbench\\_worker.py\", line 43, in main\n    exec(compile(code, \"<candidate>\", \"exec\"), ns)\n    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<candidate>\", line 2, in <module>\nModuleNotFoundError: No module named 'numba'\n",
+        "timing": null,
+        "stage": "compile",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The kernel fails at import time, not at runtime. `import numba` raises `ModuleNotFoundError: No module named 'numba'` and the `@numba.njit` decorator is therefore never available, so the module cannot be compiled/executed at all.\n\nRemove the Numba dependency entirely. The `_blit` function and the `kernel` wrapper must be implemented without `import numba` and without `@numba.njit`, using only the allowed NumPy / Python stack. Once the import is gone the rest of the bilinear resampling and per-pixel alpha blend logic can be retained.",
+      "usage": {
+        "prompt_tokens": 2295,
+        "completion_tokens": 10844,
+        "cost_usd": 0.282575
+      },
+      "wall_s": 334.247,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.282575
+}

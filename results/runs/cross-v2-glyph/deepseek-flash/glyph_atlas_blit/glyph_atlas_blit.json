@@ -1,0 +1,65 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:deepseek-flash",
+  "model": "deepseek-ai/deepseek-v4-flash-0731",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 375s (deadline 600s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=90)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The submission contains no kernel body \u2014 the code block is empty. The parse stage fails because there is nothing to compile or execute. The next attempt must provide a complete `kernel` function implementing the fractional-offset bilinear (or 1/8-px supersampled) coverage resampling, the order-dependent alpha blend, and rounding to nearest. Ensure the function signature matches exactly and that all arrays are handled as `np.ndarray`. The provider timeout is irrelevant; the empty submission caused the failure.",
+      "usage": {
+        "prompt_tokens": 679,
+        "completion_tokens": 232,
+        "cost_usd": 0.009195
+      },
+      "wall_s": 426.921,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 375s (deadline 600s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=90)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 375.414,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.009195
+}

@@ -1,0 +1,73 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:kimi-k3",
+  "model": "moonshotai/kimi-k3",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 377s (deadline 600s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=90)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The submission is empty \u2014 the model provider timed out (read timeout after 377s) before returning any code, so there is no kernel to evaluate. This is an infrastructure failure, not an algorithmic one.\n\nFor the next attempt: keep the generation prompt simple and bounded so the provider responds quickly. The kernel itself is straightforward: for each glyph, split `gy[i]`/`gx[i]` into integer origin and fractional offset, bilinearly resample `atlas[gid[i]]` by that fraction (shift-and-weight the four integer-shifted copies of the coverage tile), then alpha-blend `rgb[i]` into the target slice of a float copy of `page`. Process glyphs sequentially in array order since overlaps are order-dependent, and round once at the end. Avoid any per-pixel Python loops \u2014 vectorize each glyph's blend with NumPy slicing \u2014 so the implementation is short enough to generate well within the provider timeout.",
+      "usage": {
+        "prompt_tokens": 752,
+        "completion_tokens": 216,
+        "cost_usd": 0.00916
+      },
+      "wall_s": 434.453,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\n\ndef kernel(page, atlas, gid, gy, gx, rgb) -> np.ndarray:\n    out = page.astype(np.float64)\n    H, W = out.shape[0], out.shape[1]\n    gh, gw = atlas.shape[1], atlas.shape[2]\n    n = len(gid)\n    for i in range(n):\n        fy = float(gy[i])\n        fx = float(gx[i])\n        y0 = int(np.floor(fy))\n        x0 = int(np.floor(fx))\n        ry = fy - y0\n        rx = fx - x0\n        cov = atlas[gid[i]].astype(np.float64)\n        # bilinear resample by fractional offset (shift-and-weight)\n        # coverage at output pixel p = weighted sum of coverage at\n        # p - (rx, ry); equivalently splat each source pixel onto the\n        # four neighbouring output pixels.\n        a = np.zeros((gh + 1, gw + 1), dtype=np.float64)\n        w00 = (1.0 - ry) * (1.0 - rx)\n        w01 = (1.0 - ry) * rx\n        w10 = ry * (1.0 - rx)\n        w11 = ry * rx\n        a[:gh, :gw] += cov * w00\n        a[:gh, 1:] += cov * w01\n        a[1:, :gw] += cov * w10\n        a[1:, 1:] += cov * w11\n        a *= (1.0 / 255.0)\n        y1 = y0 + gh + 1\n        x1 = x0 + gw + 1\n        # clip to page (placements never cross the edge, but be safe)\n        sy0 = max(y0, 0)\n        sx0 = max(x0, 0)\n        sy1 = min(y1, H)\n        sx1 = min(x1, W)\n        ay0 = sy0 - y0\n        ax0 = sx0 - x0\n        tile = out[sy0:sy1, sx0:sx1]\n        alpha = a[ay0:ay0 + (sy1 - sy0), ax0:ax0 + (sx1 - sx0)][:, :, None]\n        col = np.asarray(rgb[i], dtype=np.float64)\n        tile *= (1.0 - alpha)\n        tile += col * alpha\n    return np.rint(out).astype(np.uint8)",
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+        "timing": null,
+        "stage": "correctness",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {
+          "mode": "perceptual",
+          "detail": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.74583 (floor 0.998) max_px=0.9725 (cap 0.1) bad_frac=0.11053 (cap 0.001)",
+          "metrics": {
+            "ssim": 0.7458271927767557,
+            "max_pixel_err": 0.9725490196078431,
+            "bad_frac": 0.11052576700846355
+          }
+        },
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 1119,
+        "completion_tokens": 563,
+        "cost_usd": 0.01967
+      },
+      "wall_s": 254.523,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.02883
+}

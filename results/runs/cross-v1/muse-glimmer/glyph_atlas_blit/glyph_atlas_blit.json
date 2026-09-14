@@ -1,0 +1,65 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:muse-glimmer",
+  "model": "meta/muse-glimmer-30b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=47.8270636999805)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The submission contains no implementation \u2013 the kernel body is empty. With no code to parse the provider never receives a callable `kernel(page, atlas, gid, gy, gx, rgb)` and the request times out at parse stage.\n\nSupply a concrete implementation with the required signature that returns a copy of `page` and performs order-dependent alpha blending with sub-pixel phase resolved to \u22641/8 px and no coverage loss.",
+      "usage": {
+        "prompt_tokens": 684,
+        "completion_tokens": 712,
+        "cost_usd": 0.02122
+      },
+      "wall_s": 252.848,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.8194273999834)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 240.223,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.02122
+}

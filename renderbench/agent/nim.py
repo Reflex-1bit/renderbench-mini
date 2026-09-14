@@ -62,9 +62,18 @@ def provider(label: str, budget_usd: float = 0.0, **kw) -> LiveProvider:
     key = os.environ.get(API_KEY_ENV)
     if not key:
         raise RuntimeError(f"set {API_KEY_ENV} in .env or the environment")
+    # 600s, not the 240s default: these free endpoints are slow and the
+    # longer rendering prompts push them well past four minutes. A 240s
+    # ceiling invalidated an entire cross-model glyph run on 2026-09-14 --
+    # 7 of 8 "failures" were this deadline firing, not the models.
+    kw.setdefault("deadline_s", 600.0)
     p = LiveProvider(model=model, base_url=BASE_URL, api_key=key,
                      budget_usd=budget_usd or 10.0,
                      rate_limiter=SHARED_LIMITER, **kw)
+    # Measured 2026-09-14 on deepseek-v4-flash with the glyph prompt:
+    # thinking on  -> 240s, 0 chars of content (all hidden reasoning)
+    # thinking off ->  37s, 2,192 chars of code, first char at 4s
+    p.extra_body = {"chat_template_kwargs": {"thinking": False}}
     p.name = f"nim:{label}"
     return p
 

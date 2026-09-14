@@ -1,0 +1,127 @@
+{
+  "task_id": "blit",
+  "provider": "nim:muse-glimmer",
+  "model": "meta/muse-glimmer-30b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = np.copy(dst)\n    sh, sw = src.shape[0], src.shape[1]\n    H, W = dst.shape[0], dst.shape[1]\n\n    y0 = -dy if dy < 0 else 0\n    if y0 < 0:\n        y0 = 0\n    y1 = H - dy\n    if y1 > sh:\n        y1 = sh\n    if y1 < 0:\n        y1 = 0\n\n    x0 = -dx if dx < 0 else 0\n    if x0 < 0:\n        x0 = 0\n    x1 = W - dx\n    if x1 > sw:\n        x1 = sw\n    if x1 < 0:\n        x1 = 0\n\n    if y0 < y1 and x0 < x1:\n        dy0 = dy + y0\n        dx0 = dx + x0\n        out[dy0:dy0 + y1 - y0, dx0:dx0 + x1 - x0] = src[y0:y1, x0:x1]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.7280000136233866,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 15.555356853732066,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.7280000136233866,
+          "mean_ms": 0.7304600013109545,
+          "p05_ms": 0.7104999967850745,
+          "p95_ms": 0.7642999989911914,
+          "iqr_ms": 0.020299979951232672,
+          "cv": 0.019622744478304772,
+          "trials": 15,
+          "samples_ms": [
+            0.7105,
+            0.7162,
+            0.7176,
+            0.7196,
+            0.7212,
+            0.7238,
+            0.7268,
+            0.728,
+            0.7288,
+            0.7302,
+            0.7311,
+            0.7399,
+            0.7428,
+            0.7561,
+            0.7643
+          ]
+        }
+      },
+      "critique": "The kernel is correct and bit-identical.\n\nThe clipping arithmetic is correct but wasteful: `y0 = -dy if dy < 0 else 0` is already \u22650, so the following `if y0 < 0: y0 = 0` is dead code, same for `x0`. `y1`/`x1` are clamped with two Python `if`s each; a single `np.clip`/`max/min` per axis removes the branches.\n\nThe dominant cost left is the unconditional `out = np.copy(dst)`. For large `dst` with a small clipped `src` the full destination copy dominates runtime and cannot be avoided under the \u201creturn a new array\u201d contract. No dtype widening, redundant allocation or transcendental work remains; the only remaining headroom is removing the Python scalar branching in the bounds computation and keeping the copy+slice assignment in NumPy.",
+      "usage": {
+        "prompt_tokens": 1240,
+        "completion_tokens": 2472,
+        "cost_usd": 0.068
+      },
+      "wall_s": 183.879,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = dst.copy()\n    sh, sw = src.shape[0], src.shape[1]\n    H, W = dst.shape[0], dst.shape[1]\n\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    if y0 >= y1:\n        return out\n\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n    if x0 >= x1:\n        return out\n\n    src_y0 = y0 - dy\n    src_x0 = x0 - dx\n\n    out[y0:y1, x0:x1] = src[src_y0:src_y0 + (y1 - y0), src_x0:src_x0 + (x1 - x0)]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.6830999918747693,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 16.577807255353672,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.6830999918747693,
+          "mean_ms": 0.7085666661926856,
+          "p05_ms": 0.6395000091288239,
+          "p95_ms": 1.0562000097706914,
+          "iqr_ms": 0.04220000118948519,
+          "cv": 0.13446031313638115,
+          "trials": 15,
+          "samples_ms": [
+            0.6395,
+            0.6609,
+            0.6614,
+            0.6653,
+            0.6764,
+            0.6796,
+            0.6798,
+            0.6831,
+            0.6858,
+            0.6983,
+            0.7026,
+            0.7075,
+            0.7112,
+            0.7209,
+            1.0562
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 822,
+        "completion_tokens": 1526,
+        "cost_usd": 0.04226
+      },
+      "wall_s": 77.686,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 1,
+  "best_ms": 0.6830999918747693,
+  "best_speedup": 16.577807255353672,
+  "best_kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = dst.copy()\n    sh, sw = src.shape[0], src.shape[1]\n    H, W = dst.shape[0], dst.shape[1]\n\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    if y0 >= y1:\n        return out\n\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n    if x0 >= x1:\n        return out\n\n    src_y0 = y0 - dy\n    src_x0 = x0 - dx\n\n    out[y0:y1, x0:x1] = src[src_y0:src_y0 + (y1 - y0), src_x0:src_x0 + (x1 - x0)]\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.11026
+}

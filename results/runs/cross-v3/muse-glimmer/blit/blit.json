@@ -1,0 +1,127 @@
+{
+  "task_id": "blit",
+  "provider": "nim:muse-glimmer",
+  "model": "meta/muse-glimmer-30b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H, W, _ = dst.shape\n    sh, sw, _ = src.shape\n\n    y0_dst = dy if dy > 0 else 0\n    if y0_dst < 0:\n        y0_dst = 0\n    y1_dst = dy + sh\n    if y1_dst > H:\n        y1_dst = H\n    x0_dst = dx if dx > 0 else 0\n    if x0_dst < 0:\n        x0_dst = 0\n    x1_dst = dx + sw\n    if x1_dst > W:\n        x1_dst = W\n\n    # use max/min for clarity and correctness with large values\n    y0_dst = max(dy, 0)\n    y1_dst = min(dy + sh, H)\n    x0_dst = max(dx, 0)\n    x1_dst = min(dx + sw, W)\n\n    if y0_dst >= y1_dst or x0_dst >= x1_dst:\n        return dst.copy()\n\n    src_y0 = y0_dst - dy\n    src_x0 = x0_dst - dx\n    src_y1 = src_y0 + (y1_dst - y0_dst)\n    src_x1 = src_x0 + (x1_dst - x0_dst)\n\n    out = dst.copy()\n    out[y0_dst:y1_dst, x0_dst:x1_dst] = src[src_y0:src_y1, src_x0:src_x1]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.6896999839227647,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 16.41916813891317,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.6896999839227647,
+          "mean_ms": 0.7243866702386489,
+          "p05_ms": 0.6092000112403184,
+          "p95_ms": 0.8835000044200569,
+          "iqr_ms": 0.10439998004585505,
+          "cv": 0.10012205961475772,
+          "trials": 15,
+          "samples_ms": [
+            0.6092,
+            0.6663,
+            0.6717,
+            0.6733,
+            0.6823,
+            0.6837,
+            0.6852,
+            0.6897,
+            0.716,
+            0.7345,
+            0.7531,
+            0.7777,
+            0.7789,
+            0.8607,
+            0.8835
+          ]
+        }
+      },
+      "critique": "The kernel is correct and bit-identical.\n\nThe remaining cost is dominated by the mandatory `dst.copy()` which must allocate and copy the whole H\u00d7W\u00d74 image; the NumPy slice assignment for the blit itself is already optimal.\n\nThe Python-level overhead can be trimmed: the first manual clip block for `y0_dst/y1_dst/x0_dst/x1_dst` is dead code because it is immediately overwritten by the `max/min` recomputation, and the scalar `max/min` work is done twice. Removing the duplicate clip computation and the unused branches eliminates wasted Python scalar ops with no correctness change. No dtype, allocation or algorithmic improvement is possible without violating the \u201creturn a new array\u201d requirement.",
+      "usage": {
+        "prompt_tokens": 1314,
+        "completion_tokens": 2309,
+        "cost_usd": 0.064295
+      },
+      "wall_s": 250.942,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = dst.copy()\n    H, W = dst.shape[:2]\n    sh, sw = src.shape[:2]\n\n    y0_dst = dy\n    y1_dst = dy + sh\n    x0_dst = dx\n    x1_dst = dx + sw\n\n    y0_dst = y0_dst if y0_dst > 0 else 0\n    if y0_dst >= H:\n        y0_dst = H\n    y1_dst = y1_dst if y1_dst < H else H\n    if y1_dst < 0:\n        y1_dst = 0\n\n    x0_dst = x0_dst if x0_dst > 0 else 0\n    if x0_dst >= W:\n        x0_dst = W\n    x1_dst = x1_dst if x1_dst < W else W\n    if x1_dst < 0:\n        x1_dst = 0\n\n    # equivalent to max/min but avoids duplicate work\n    y0_dst = max(0, min(H, y0_dst))\n    y1_dst = max(0, min(H, y1_dst))\n    x0_dst = max(0, min(W, x0_dst))\n    x1_dst = max(0, min(W, x1_dst))\n\n    if y0_dst < y1_dst and x0_dst < x1_dst:\n        y0_src = y0_dst - dy\n        y1_src = y1_dst - dy\n        x0_src = x0_dst - dx\n        x1_src = x1_dst - dx\n        out[y0_dst:y1_dst, x0_dst:x1_dst] = src[y0_src:y1_src, x0_src:x1_src]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.8489000028930604,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 13.339969328354632,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.8489000028930604,
+          "mean_ms": 0.8823333346905807,
+          "p05_ms": 0.8110000053420663,
+          "p95_ms": 1.2391000054776669,
+          "iqr_ms": 0.05909998435527086,
+          "cv": 0.11605459052377574,
+          "trials": 15,
+          "samples_ms": [
+            0.811,
+            0.8211,
+            0.8247,
+            0.8272,
+            0.8336,
+            0.8356,
+            0.8391,
+            0.8489,
+            0.859,
+            0.8708,
+            0.8756,
+            0.8863,
+            0.9025,
+            0.9605,
+            1.2391
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 782,
+        "completion_tokens": 1303,
+        "cost_usd": 0.036485
+      },
+      "wall_s": 63.304,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 0,
+  "best_ms": 0.6896999839227647,
+  "best_speedup": 16.41916813891317,
+  "best_kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H, W, _ = dst.shape\n    sh, sw, _ = src.shape\n\n    y0_dst = dy if dy > 0 else 0\n    if y0_dst < 0:\n        y0_dst = 0\n    y1_dst = dy + sh\n    if y1_dst > H:\n        y1_dst = H\n    x0_dst = dx if dx > 0 else 0\n    if x0_dst < 0:\n        x0_dst = 0\n    x1_dst = dx + sw\n    if x1_dst > W:\n        x1_dst = W\n\n    # use max/min for clarity and correctness with large values\n    y0_dst = max(dy, 0)\n    y1_dst = min(dy + sh, H)\n    x0_dst = max(dx, 0)\n    x1_dst = min(dx + sw, W)\n\n    if y0_dst >= y1_dst or x0_dst >= x1_dst:\n        return dst.copy()\n\n    src_y0 = y0_dst - dy\n    src_x0 = x0_dst - dx\n    src_y1 = src_y0 + (y1_dst - y0_dst)\n    src_x1 = src_x0 + (x1_dst - x0_dst)\n\n    out = dst.copy()\n    out[y0_dst:y1_dst, x0_dst:x1_dst] = src[src_y0:src_y1, src_x0:src_x1]\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.10078000000000001
+}

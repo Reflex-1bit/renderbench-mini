@@ -1,0 +1,65 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:nemotron-ultra",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=86.59039259998826)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The kernel is empty \u2014 no implementation was provided. The judge timed out because there is no executable code. You must implement the full glyph-atlas blit: for each glyph, fetch its coverage from `atlas[gid[i]]`, resample it to the fractional offset `(gy[i], gx[i])` with at least 1/8-pixel phase accuracy (bilinear or 1/8-px supersampling), then blend in order using `page = page*(1-a) + rgb[i]*a` with `a = coverage/255`, and finally round to nearest uint8.",
+      "usage": {
+        "prompt_tokens": 726,
+        "completion_tokens": 401,
+        "cost_usd": 0.013655
+      },
+      "wall_s": 296.67,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.82765970000764)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 240.063,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.013654999999999999
+}

@@ -1,0 +1,127 @@
+{
+  "task_id": "blit",
+  "provider": "nim:kimi-k3",
+  "model": "moonshotai/kimi-k3",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = dst.copy()\n    H, W = dst.shape[0], dst.shape[1]\n    sh, sw = src.shape[0], src.shape[1]\n\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    if y0 < y1 and x0 < x1:\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.9380000119563192,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 12.0728143465748,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.9380000119563192,
+          "mean_ms": 0.9981733319970468,
+          "p05_ms": 0.8650999807287008,
+          "p95_ms": 1.3040000048931688,
+          "iqr_ms": 0.12349997996352613,
+          "cv": 0.12935707013782458,
+          "trials": 15,
+          "samples_ms": [
+            0.8651,
+            0.8905,
+            0.9037,
+            0.9047,
+            0.9254,
+            0.935,
+            0.9358,
+            0.938,
+            0.9477,
+            0.9719,
+            1.0215,
+            1.0282,
+            1.1449,
+            1.2562,
+            1.304
+          ]
+        }
+      },
+      "critique": "Pass, and the implementation is already close to optimal: the clip math is branch-light scalar work, and the actual pixel movement is two contiguous-ish memcpys (`dst.copy()` plus the strided slice assignment), both of which are required by the semantics \u2014 the destination must be copied, and the overlapping region must be written.\n\nRemaining headroom is small and structural:\n\n1. The slice assignment `out[y0:y1, x0:x1] = src[...]` copies row-by-row over a strided region. If `src` is non-contiguous (e.g. a view), NumPy falls back to a slower path; calling `np.ascontiguousarray(src)` once before the blit guarantees the fast memcpy loop. Cheap insurance, no downside.\n\n2. The Python-level clamping (six comparisons) is negligible at these sizes but is the only Python work left; nothing to hoist since it's already O(1).\n\nDo not try to avoid the full `dst.copy()` \u2014 the contract requires a new array, so that memcpy is irreducible. At 12x over baseline with bit-identical output, this kernel is done; further gains would come only from a C-level fused copy-and-blit, which isn't expressible in pure NumPy.",
+      "usage": {
+        "prompt_tokens": 1292,
+        "completion_tokens": 597,
+        "cost_usd": 0.021385
+      },
+      "wall_s": 129.538,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = dst.copy()\n    H, W = dst.shape[0], dst.shape[1]\n    sh, sw = src.shape[0], src.shape[1]\n\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    if y0 < y1 and x0 < x1:\n        sy0 = y0 - dy\n        sx0 = x0 - dx\n        region = src[sy0:sy0 + (y1 - y0), sx0:sx0 + (x1 - x0)]\n        if not region.flags.c_contiguous:\n            region = np.ascontiguousarray(region)\n        out[y0:y1, x0:x1] = region\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.760499999159947,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 14.890598308931592,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.760499999159947,
+          "mean_ms": 0.7683866676719239,
+          "p05_ms": 0.7305000035557896,
+          "p95_ms": 0.9574999858159572,
+          "iqr_ms": 0.028700014809146523,
+          "cv": 0.06965293032992025,
+          "trials": 15,
+          "samples_ms": [
+            0.7305,
+            0.7306,
+            0.7351,
+            0.7383,
+            0.7414,
+            0.7421,
+            0.7603,
+            0.7605,
+            0.7612,
+            0.7639,
+            0.7658,
+            0.767,
+            0.779,
+            0.7926,
+            0.9575
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 964,
+        "completion_tokens": 269,
+        "cost_usd": 0.011545
+      },
+      "wall_s": 44.084,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 1,
+  "best_ms": 0.760499999159947,
+  "best_speedup": 14.890598308931592,
+  "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    out = dst.copy()\n    H, W = dst.shape[0], dst.shape[1]\n    sh, sw = src.shape[0], src.shape[1]\n\n    y0 = dy if dy > 0 else 0\n    x0 = dx if dx > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    if y0 < y1 and x0 < x1:\n        sy0 = y0 - dy\n        sx0 = x0 - dx\n        region = src[sy0:sy0 + (y1 - y0), sx0:sx0 + (x1 - x0)]\n        if not region.flags.c_contiguous:\n            region = np.ascontiguousarray(region)\n        out[y0:y1, x0:x1] = region\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.03293
+}

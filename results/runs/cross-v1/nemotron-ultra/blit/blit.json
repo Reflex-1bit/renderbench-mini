@@ -1,0 +1,96 @@
+{
+  "task_id": "blit",
+  "provider": "nim:nemotron-ultra",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H, W = dst.shape[0], dst.shape[1]\n    sh, sw = src.shape[0], src.shape[1]\n\n    # Destination region that overlaps with source\n    dst_y_start = max(dy, 0)\n    dst_y_end = min(dy + sh, H)\n    dst_x_start = max(dx, 0)\n    dst_x_end = min(dx + sw, W)\n\n    # No overlap\n    if dst_y_start >= dst_y_end or dst_x_start >= dst_x_end:\n        return dst.copy()\n\n    # Corresponding source region\n    src_y_start = dst_y_start - dy\n    src_y_end = src_y_start + (dst_y_end - dst_y_start)\n    src_x_start = dst_x_start - dx\n    src_x_end = src_x_start + (dst_x_end - dst_x_start)\n\n    out = dst.copy()\n    out[dst_y_start:dst_y_end, dst_x_start:dst_x_end] = src[src_y_start:src_y_end, src_x_start:src_x_end]\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.7125000120140612,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 15.893754119979018,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.7125000120140612,
+          "mean_ms": 0.7556133321486413,
+          "p05_ms": 0.6666999834123999,
+          "p95_ms": 1.0050999990198761,
+          "iqr_ms": 0.06730001769028604,
+          "cv": 0.1278891205270986,
+          "trials": 15,
+          "samples_ms": [
+            0.6667,
+            0.6849,
+            0.6951,
+            0.7029,
+            0.7094,
+            0.7099,
+            0.7105,
+            0.7125,
+            0.7285,
+            0.739,
+            0.7454,
+            0.7702,
+            0.7782,
+            0.9759,
+            1.0051
+          ]
+        }
+      },
+      "critique": "The kernel is correct and fast (15.9\u00d7 baseline). The only significant headroom is the unconditional `dst.copy()`, which copies the full destination even when the blit region is tiny. For large `dst`/small `src` this allocation dominates. A zero-copy alternative would allocate `out = np.empty_like(dst)`, copy the four non-overlapping border strips from `dst` into `out`, then write the blended slice\u2014trading one large memcpy for up to five smaller ones. In pure NumPy this rarely wins unless the blit covers <5\u202f% of `dst`; otherwise the current slice assignment is already optimal. No other low-hanging fruit (dtype, transcendental, loop hoisting) applies.",
+      "usage": {
+        "prompt_tokens": 1229,
+        "completion_tokens": 1122,
+        "cost_usd": 0.034195
+      },
+      "wall_s": 231.236,
+      "parse_failed": false
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 239s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=90)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 239.0,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 0,
+  "best_ms": 0.7125000120140612,
+  "best_speedup": 15.893754119979018,
+  "best_kernel": "import numpy as np\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    H, W = dst.shape[0], dst.shape[1]\n    sh, sw = src.shape[0], src.shape[1]\n\n    # Destination region that overlaps with source\n    dst_y_start = max(dy, 0)\n    dst_y_end = min(dy + sh, H)\n    dst_x_start = max(dx, 0)\n    dst_x_end = min(dx + sw, W)\n\n    # No overlap\n    if dst_y_start >= dst_y_end or dst_x_start >= dst_x_end:\n        return dst.copy()\n\n    # Corresponding source region\n    src_y_start = dst_y_start - dy\n    src_y_end = src_y_start + (dst_y_end - dst_y_start)\n    src_x_start = dst_x_start - dx\n    src_x_end = src_x_start + (dst_x_end - dst_x_start)\n\n    out = dst.copy()\n    out[dst_y_start:dst_y_end, dst_x_start:dst_x_end] = src[src_y_start:src_y_end, src_x_start:src_x_end]\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.034194999999999996
+}

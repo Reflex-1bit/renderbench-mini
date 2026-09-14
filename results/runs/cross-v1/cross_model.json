@@ -1,0 +1,256 @@
+{
+  "tag": "cross-v1",
+  "timestamp_utc": "20260914T083222Z",
+  "models": {
+    "deepseek-flash": "deepseek-ai/deepseek-v4-flash-0731",
+    "kimi-k3": "moonshotai/kimi-k3",
+    "muse-glimmer": "meta/muse-glimmer-30b",
+    "nemotron-ultra": "nvidia/nemotron-3-ultra-550b-a55b"
+  },
+  "tasks": [
+    "blit",
+    "glyph_atlas_blit"
+  ],
+  "rounds": 2,
+  "endpoint": "https://integrate.api.nvidia.com/v1",
+  "rpm_limit": 40,
+  "limiter_waits": 14,
+  "limiter_total_wait_s": 47.1,
+  "wall_s": 659.6,
+  "n_solved": 4,
+  "n_jobs": 8,
+  "results": [
+    {
+      "model": "deepseek-flash",
+      "task": "blit",
+      "status": "ok",
+      "solved": true,
+      "rounds_to_first_pass": 0,
+      "baseline_ms": 11.324300001433585,
+      "best_ms": 0.7314000104088336,
+      "best_speedup": 15.483045994357582,
+      "wall_s": 659.5877482999931,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": true,
+          "stage": "done",
+          "error": "",
+          "completion_tokens": 1515,
+          "wall_s": 419.404
+        },
+        {
+          "index": 1,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.500684",
+          "completion_tokens": 0,
+          "wall_s": 240.175
+        }
+      ]
+    },
+    {
+      "model": "deepseek-flash",
+      "task": "glyph_atlas_blit",
+      "status": "ok",
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "baseline_ms": 43.831449998833705,
+      "best_ms": null,
+      "best_speedup": null,
+      "wall_s": 537.6110538999783,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=55.142597",
+          "completion_tokens": 283,
+          "wall_s": 297.494
+        },
+        {
+          "index": 1,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=55.867457",
+          "completion_tokens": 0,
+          "wall_s": 240.11
+        }
+      ]
+    },
+    {
+      "model": "kimi-k3",
+      "task": "blit",
+      "status": "ok",
+      "solved": true,
+      "rounds_to_first_pass": 0,
+      "baseline_ms": 11.324300001433585,
+      "best_ms": 0.760499999159947,
+      "best_speedup": 14.890598308931592,
+      "wall_s": 173.63246249998338,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": true,
+          "stage": "done",
+          "error": "",
+          "completion_tokens": 597,
+          "wall_s": 129.538
+        },
+        {
+          "index": 1,
+          "pass": true,
+          "stage": "done",
+          "error": "",
+          "completion_tokens": 269,
+          "wall_s": 44.084
+        }
+      ]
+    },
+    {
+      "model": "kimi-k3",
+      "task": "glyph_atlas_blit",
+      "status": "ok",
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "baseline_ms": 43.831449998833705,
+      "best_ms": null,
+      "best_speedup": null,
+      "wall_s": 646.7153135999979,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": false,
+          "stage": "correctness",
+          "error": "FAILED [ssim,max_pixel_err,bad_frac] ssim=0.73549 (floor 0.998) max_px=1.0000 (cap 0.1) bad_frac=0.11141 (cap 0.001)",
+          "completion_tokens": 717,
+          "wall_s": 406.354
+        },
+        {
+          "index": 1,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.853139",
+          "completion_tokens": 0,
+          "wall_s": 240.355
+        }
+      ]
+    },
+    {
+      "model": "muse-glimmer",
+      "task": "blit",
+      "status": "ok",
+      "solved": true,
+      "rounds_to_first_pass": 0,
+      "baseline_ms": 11.324300001433585,
+      "best_ms": 0.6830999918747693,
+      "best_speedup": 16.577807255353672,
+      "wall_s": 261.5727516999759,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": true,
+          "stage": "done",
+          "error": "",
+          "completion_tokens": 2472,
+          "wall_s": 183.879
+        },
+        {
+          "index": 1,
+          "pass": true,
+          "stage": "done",
+          "error": "",
+          "completion_tokens": 1526,
+          "wall_s": 77.686
+        }
+      ]
+    },
+    {
+      "model": "muse-glimmer",
+      "task": "glyph_atlas_blit",
+      "status": "ok",
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "baseline_ms": 43.831449998833705,
+      "best_ms": null,
+      "best_speedup": null,
+      "wall_s": 493.0765462999989,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=47.827063",
+          "completion_tokens": 712,
+          "wall_s": 252.848
+        },
+        {
+          "index": 1,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.819427",
+          "completion_tokens": 0,
+          "wall_s": 240.223
+        }
+      ]
+    },
+    {
+      "model": "nemotron-ultra",
+      "task": "blit",
+      "status": "ok",
+      "solved": true,
+      "rounds_to_first_pass": 0,
+      "baseline_ms": 11.324300001433585,
+      "best_ms": 0.7125000120140612,
+      "best_speedup": 15.893754119979018,
+      "wall_s": 470.2450326999824,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": true,
+          "stage": "done",
+          "error": "",
+          "completion_tokens": 1122,
+          "wall_s": 231.236
+        },
+        {
+          "index": 1,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 239s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=90)\"))",
+          "completion_tokens": 0,
+          "wall_s": 239.0
+        }
+      ]
+    },
+    {
+      "model": "nemotron-ultra",
+      "task": "glyph_atlas_blit",
+      "status": "ok",
+      "solved": false,
+      "rounds_to_first_pass": null,
+      "baseline_ms": 43.831449998833705,
+      "best_ms": null,
+      "best_speedup": null,
+      "wall_s": 536.7377798999951,
+      "rounds": [
+        {
+          "index": 0,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=86.590392",
+          "completion_tokens": 401,
+          "wall_s": 296.67
+        },
+        {
+          "index": 1,
+          "pass": false,
+          "stage": "parse",
+          "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=56.827659",
+          "completion_tokens": 0,
+          "wall_s": 240.063
+        }
+      ]
+    }
+  ]
+}

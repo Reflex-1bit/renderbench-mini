@@ -1,0 +1,65 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:nemotron-ultra",
+  "model": "nvidia/nemotron-3-ultra-550b-a55b",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 337s (deadline 600s): HTTP 503: {\"error\":{\"message\":\"Service temporarily overloaded\",\"type\":\"Service Unavailable\",\"code\":503}}",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The kernel is empty \u2014 no implementation exists. The root cause of failure is the complete absence of logic to iterate glyphs, resample coverage at fractional offsets, and blend in order. The next attempt must: (1) loop over `len(gid)`; (2) for each glyph, split `gy[i], gx[i]` into integer `(iy, ix)` and fractional `(fy, fx)` parts; (3) resample `atlas[gid[i]]` to the page region `[iy:iy+gh, ix:ix+gw]` using bilinear interpolation or 1/8-pixel supersampling to meet the 1/8-px phase requirement; (4) compute alpha `a = coverage/255` and blend `page = page*(1-a) + rgb[i]*a` in-place on a float copy; (5) round final result to uint8. Ensure no glyph is dropped and coverage sums are preserved.",
+      "usage": {
+        "prompt_tokens": 701,
+        "completion_tokens": 751,
+        "cost_usd": 0.02228
+      },
+      "wall_s": 497.902,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 332s (deadline 600s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=90)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 332.255,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.02228
+}

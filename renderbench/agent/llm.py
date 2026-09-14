@@ -152,7 +152,8 @@ class LiveProvider(Provider):
     def __init__(self, model: str = PINNED_MODEL, base_url: str = PINNED_BASE_URL,
                  api_key: str | None = None, temperature: float = 0.2,
                  budget_usd: float = BUDGET_USD,
-                 rate_limiter: "RateLimiter | None" = None):
+                 rate_limiter: "RateLimiter | None" = None,
+                 deadline_s: float = 240.0):
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key or os.environ.get(API_KEY_ENV)
@@ -167,6 +168,99 @@ class LiveProvider(Provider):
         self.backend = "anthropic" if "anthropic.com" in self.base_url else "openai"
         # Shared across every provider on the same key; see RateLimiter.
         self.rate_limiter = rate_limiter
+        # Per-call wall-clock ceiling. Set on the provider rather than fixed in
+        # complete() because it is a property of the ENDPOINT's speed, not of
+        # the call: 240s silently invalidated a whole cross-model glyph run
+        # (7 of 8 failures were this deadline, not the models), because the
+        # glyph prompt is long and these free reasoning endpoints are slow.
+        self.deadline_s = deadline_s
+        # Stream by default on OpenAI-compatible endpoints. Non-streaming
+        # returns zero bytes until generation completes, which trips requests'
+        # between-bytes read timeout on any long reasoning generation.
+        self.stream = True
+        # Vendor-specific knobs merged into the request body. On NIM's
+        # reasoning models {"chat_template_kwargs": {"thinking": False}} is the
+        # difference between 37s with 2,192 chars of code and 240s with zero:
+        # left on, they stream hidden reasoning for minutes before emitting a
+        # single character of the answer.
+        self.extra_body: dict = {}
+
+    def _complete_streaming(self, url, headers, body, started, deadline_s):
+        """Stream the response over SSE instead of waiting for one buffered blob.
+
+        This is not an optimisation, it is the difference between working and
+        not working on these endpoints. With stream=False the server sends ZERO
+        bytes until the entire generation finishes, and `requests`' read timeout
+        measures the gap BETWEEN bytes -- so a long reasoning generation trips it
+        every time no matter how high the timeout is set. Measured on
+        deepseek-v4-flash with the glyph prompt: non-streaming returned 0 tokens
+        after 597s; streaming delivered its first chunk in 1.0s and 4,882
+        characters in 101s. Same endpoint, same prompt, same minute.
+
+        It also gives the wall-clock deadline something to actually enforce
+        against, since we can check it between chunks rather than being blocked
+        inside one opaque socket read.
+        """
+        import requests
+
+        body = {**body, "stream": True,
+                "stream_options": {"include_usage": True}}
+        content: list[str] = []
+        reasoning: list[str] = []
+        usage = Usage()
+        finish = None
+
+        with requests.post(url, headers=headers, json=body,
+                          timeout=(15, 120), stream=True) as r:
+            if r.status_code in PERMANENT_HTTP:
+                raise PermanentProviderError(
+                    f"permanent HTTP {r.status_code}: {r.text[:200]}")
+            r.raise_for_status()
+            for line in r.iter_lines():
+                if time.monotonic() - started > deadline_s:
+                    raise TimeoutError(
+                        f"exceeded {deadline_s:.0f}s deadline mid-stream after "
+                        f"{sum(len(c) for c in content)} content chars")
+                if not line:
+                    continue
+                s = line.decode("utf-8", "ignore")
+                if not s.startswith("data: "):
+                    continue
+                payload = s[6:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    d = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                u = d.get("usage") or {}
+                if u:
+                    usage = Usage(int(u.get("prompt_tokens", 0) or 0),
+                                  int(u.get("completion_tokens", 0) or 0))
+                for ch in d.get("choices") or []:
+                    delta = ch.get("delta") or {}
+                    if delta.get("content"):
+                        content.append(delta["content"])
+                    # Reasoning models stream hidden reasoning on its own key.
+                    for rk in ("reasoning_content", "reasoning"):
+                        if delta.get(rk):
+                            reasoning.append(delta[rk])
+                    if ch.get("finish_reason"):
+                        finish = ch["finish_reason"]
+
+        self.spent_usd += usage.cost_usd
+        self.calls += 1
+        text = "".join(content) or None
+        if text is None:
+            joined = "".join(reasoning)
+            if extract_kernel(joined):
+                text = joined
+            else:
+                raise RuntimeError(
+                    f"empty streamed content (finish_reason={finish}); "
+                    f"reasoning={len(joined)} chars, no kernel in it")
+        return Completion(text, usage, {"stream": True, "finish_reason": finish,
+                                        "reasoning_chars": len("".join(reasoning))})
 
     def _request(self, system: str, user: str, max_tokens: int):
         """Build (url, headers, body) for the configured backend."""
@@ -190,7 +284,8 @@ class LiveProvider(Provider):
             {"model": self.model,
              "messages": [{"role": "system", "content": system},
                           {"role": "user", "content": user}],
-             "temperature": self.temperature, "max_tokens": max_tokens},
+             "temperature": self.temperature, "max_tokens": max_tokens,
+             **self.extra_body},
         )
 
     def _parse(self, data: dict) -> tuple[str | None, Usage, str]:
@@ -225,8 +320,13 @@ class LiveProvider(Provider):
         return text, usage, f"finish_reason={choice.get('finish_reason')}"
 
     def complete(self, system: str, user: str, max_tokens: int = 12000,
-                deadline_s: float = 240) -> Completion:
+                deadline_s: float | None = None) -> Completion:
         import requests
+
+        # None -> the provider's own ceiling, so a slow endpoint can be given
+        # more room once without every call site having to know about it.
+        if deadline_s is None:
+            deadline_s = self.deadline_s
 
         if self.spent_usd >= self.budget_usd:
             raise BudgetExceeded(
@@ -254,8 +354,11 @@ class LiveProvider(Provider):
                     if remaining <= 5:
                         last = last or "call deadline spent waiting on the rate limiter"
                         break
+                if self.stream and self.backend == "openai":
+                    return self._complete_streaming(
+                        url, headers, body, started, deadline_s)
                 r = requests.post(url, headers=headers, json=body,
-                                  timeout=min(90, remaining))
+                                  timeout=max(30.0, remaining - 5.0))
                 if r.status_code in PERMANENT_HTTP:
                     # No point retrying a retired model or a bad key -- fail
                     # now rather than spending the whole deadline on it.

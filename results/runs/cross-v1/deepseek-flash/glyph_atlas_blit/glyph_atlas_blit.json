@@ -1,0 +1,65 @@
+{
+  "task_id": "glyph_atlas_blit",
+  "provider": "nim:deepseek-flash",
+  "model": "deepseek-ai/deepseek-v4-flash-0731",
+  "use_advisor": true,
+  "max_rounds": 2,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=55.142597700003535)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "The kernel is empty; no code was submitted. The provider timed out waiting for a response, so the failure is at the parse stage, not a correctness issue. The next attempt must provide a complete `kernel` function implementing the required signature. Ensure the implementation is self-contained and does not rely on external state. The algorithm must resolve sub-pixel phase to 1/8 px or finer and preserve coverage; direct bilinear resampling or 1/8-px supersampling are acceptable. Avoid any operation that could cause a hang (e.g., infinite loops, blocking I/O). Submit a concrete, runnable function.",
+      "usage": {
+        "prompt_tokens": 685,
+        "completion_tokens": 283,
+        "cost_usd": 0.0105
+      },
+      "wall_s": 297.494,
+      "parse_failed": true
+    },
+    {
+      "index": 1,
+      "kernel": null,
+      "coder_note": "",
+      "judge": {
+        "pass": false,
+        "error": "provider call failed: provider gave up after 240s (deadline 240s): ReadTimeout(ReadTimeoutError(\"HTTPSConnectionPool(host='integrate.api.nvidia.com', port=443): Read timed out. (read timeout=55.86745729998802)\"))",
+        "timing": null,
+        "stage": "parse",
+        "task_id": "glyph_atlas_blit",
+        "speedup": null,
+        "baseline_ms": null,
+        "oracle": {},
+        "timing_detail": {}
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "wall_s": 240.11,
+      "parse_failed": true
+    }
+  ],
+  "baseline_ms": 43.831449998833705,
+  "best_round": null,
+  "best_ms": null,
+  "best_speedup": null,
+  "best_kernel": null,
+  "solved": false,
+  "rounds_to_first_pass": null,
+  "cost_usd": 0.010499999999999999
+}

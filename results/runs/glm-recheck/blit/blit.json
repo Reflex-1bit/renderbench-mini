@@ -1,0 +1,72 @@
+{
+  "task_id": "blit",
+  "provider": "live",
+  "model": "z-ai/glm-5.3-free",
+  "use_advisor": true,
+  "max_rounds": 1,
+  "rounds": [
+    {
+      "index": 0,
+      "kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    # Full copy of the destination (single contiguous memcpy when possible).\n    out = dst.copy()\n\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Intersection of the placed src rect [dy, dy+sh) x [dx, dx+sw)\n    # with the destination bounds [0, H) x [0, W).\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    if y0 < y1 and x0 < x1:\n        # Vectorized strided copy of the overlapping region only.\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n\n    return out",
+      "coder_note": "",
+      "judge": {
+        "pass": true,
+        "error": "",
+        "timing": 0.6913999968674034,
+        "stage": "done",
+        "task_id": "blit",
+        "speedup": 16.37879672077198,
+        "baseline_ms": 11.324300001433585,
+        "oracle": {
+          "mode": "exact",
+          "detail": "bit-identical",
+          "metrics": {
+            "mismatched": 0.0
+          }
+        },
+        "timing_detail": {
+          "median_ms": 0.6913999968674034,
+          "mean_ms": 0.6909799994900823,
+          "p05_ms": 0.6674000178463757,
+          "p95_ms": 0.7164999842643738,
+          "iqr_ms": 0.020899984519928694,
+          "cv": 0.01879010240970702,
+          "trials": 15,
+          "samples_ms": [
+            0.6674,
+            0.6758,
+            0.6773,
+            0.6798,
+            0.6841,
+            0.6865,
+            0.6866,
+            0.6914,
+            0.6939,
+            0.6945,
+            0.6975,
+            0.7007,
+            0.7008,
+            0.7119,
+            0.7165
+          ]
+        }
+      },
+      "critique": "",
+      "usage": {
+        "prompt_tokens": 520,
+        "completion_tokens": 1331,
+        "cost_usd": 0.035875
+      },
+      "wall_s": 70.263,
+      "parse_failed": false
+    }
+  ],
+  "baseline_ms": 11.324300001433585,
+  "best_round": 0,
+  "best_ms": 0.6913999968674034,
+  "best_speedup": 16.37879672077198,
+  "best_kernel": "import numpy as np\n\n\ndef kernel(dst: np.ndarray, src: np.ndarray, dy: int, dx: int) -> np.ndarray:\n    # Full copy of the destination (single contiguous memcpy when possible).\n    out = dst.copy()\n\n    H = dst.shape[0]\n    W = dst.shape[1]\n    sh = src.shape[0]\n    sw = src.shape[1]\n\n    # Intersection of the placed src rect [dy, dy+sh) x [dx, dx+sw)\n    # with the destination bounds [0, H) x [0, W).\n    y0 = dy if dy > 0 else 0\n    y1 = dy + sh\n    if y1 > H:\n        y1 = H\n    x0 = dx if dx > 0 else 0\n    x1 = dx + sw\n    if x1 > W:\n        x1 = W\n\n    if y0 < y1 and x0 < x1:\n        # Vectorized strided copy of the overlapping region only.\n        out[y0:y1, x0:x1] = src[y0 - dy:y1 - dy, x0 - dx:x1 - dx]\n\n    return out",
+  "solved": true,
+  "rounds_to_first_pass": 0,
+  "cost_usd": 0.035875
+}
