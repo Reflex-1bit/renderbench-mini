@@ -1,6 +1,6 @@
 # RenderBench-mini
 
-A benchmark and multi-agent loop for **LLMs writing GPU rendering kernels** — a scaled-down, working implementation of a larger research plan targeting 8 tasks, datacenter Triton, and an 8-week schedule. This is the part that runs today, on one laptop, in under a minute, built to prove the methodology before the model spend starts.
+A benchmark and multi-agent loop for **LLMs writing GPU rendering kernels** a scaled-down, working implementation of a larger research plan targeting 8 tasks, datacenter Triton, and an 8-week schedule. This is the part that runs today, on one laptop, in under a minute, built to prove the methodology before the model spend starts.
 
 ```bash
 python calibrate_thresholds.py   # gate: do the oracle thresholds actually work?
